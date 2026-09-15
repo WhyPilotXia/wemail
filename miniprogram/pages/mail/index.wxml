@@ -1,0 +1,35 @@
+<view class="page">
+  <view class="hero">
+    <text class="eyebrow">WEMAIL · LETTERS</text>
+    <view class="hero-title">让等待，重新有意义</view>
+    <view class="hero-desc">记录寄出的心意，也不错过每一次抵达。</view>
+    <view class="hero-actions">
+      <button class="btn-primary hero-btn" bindtap="compose">写一封信</button>
+      <button class="contact-btn" bindtap="contacts">通讯录</button>
+    </view>
+  </view>
+  <view class="stats">
+    <view class="stat card"><text class="stat-value">{{stats.sent}}</text><text class="stat-label">近 14 天寄出</text></view>
+    <view class="stat card"><text class="stat-value">{{stats.received}}</text><text class="stat-label">近 14 天收到</text></view>
+    <view class="stat card"><text class="stat-value accent">{{stats.unsigned}}</text><text class="stat-label">待签收</text></view>
+  </view>
+  <view class="section">
+    <view class="section-head"><text class="section-title">信件记录</text><text class="muted">{{displayRecords.length}} 封</text></view>
+    <scroll-view scroll-x class="filters">
+      <view class="filter {{filter==='all'?'active':''}}" data-filter="all" bindtap="setFilter">全部</view>
+      <view class="filter {{filter==='sent'?'active':''}}" data-filter="sent" bindtap="setFilter">我寄出的</view>
+      <view class="filter {{filter==='received'?'active':''}}" data-filter="received" bindtap="setFilter">我收到的</view>
+      <view class="filter {{filter==='unsigned'?'active':''}}" data-filter="unsigned" bindtap="setFilter">待签收</view>
+    </scroll-view>
+    <view wx:if="{{loading}}" class="loading">正在整理信箱...</view>
+    <view wx:elif="{{loadError}}" class="error-card card"><text class="error-title">信件获取失败</text><text selectable class="error-detail">{{loadError}}</text><button class="btn-ghost error-retry" bindtap="retryLoad">重新获取</button></view>
+    <view wx:elif="{{!displayRecords.length}}" class="card empty"><view class="empty-icon">✉</view><view>信箱还是空的</view><view class="empty-sub">从寄出第一封信开始吧</view></view>
+    <view wx:else class="mail-list">
+      <view class="mail-item card" wx:for="{{displayRecords}}" wx:key="pageId">
+        <view class="mail-top"><view><text class="mail-type">{{item.mailType || '平信'}}</text><text class="mail-date">{{item.dateText}}</text></view><text class="status {{item.received?'done':'pending'}}">{{item.received?'已签收':'待签收'}}</text></view>
+        <view class="mail-route"><view class="person"><text class="person-name">{{item.senderName || '未知寄件人'}}</text><text>寄件人</text></view><view class="route-line"><text>→</text></view><view class="person right"><text class="person-name">{{item.recipientName || '未知收件人'}}</text><text>收件人</text></view></view>
+        <view class="mail-bottom" wx:if="{{item.trackingNo || !item.received}}"><text class="tracking">{{item.trackingNo ? '编号 '+item.trackingNo : '无邮件编号'}}</text><button wx:if="{{!item.received}}" class="sign-btn" size="mini" data-id="{{item.pageId}}" bindtap="sign">确认签收</button></view>
+      </view>
+    </view>
+  </view>
+</view>

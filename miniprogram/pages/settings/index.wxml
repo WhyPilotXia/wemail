@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="hero">
+    <text class="eyebrow">PROFILE</text>
+    <view class="hero-title">个人设置</view>
+    <view class="hero-desc">补充的信息将用于身份展示和寄信地址。</view>
+  </view>
+
+  <view class="form-card card section">
+    <view class="field"><text class="label">昵称</text><input class="input" value="{{profile.nickname}}" data-key="nickname" bindinput="input" placeholder="你的称呼"/></view>
+    <view class="field"><text class="label">邮编</text><input class="input" value="{{profile.postcode}}" data-key="postcode" bindinput="input" placeholder="邮政编码"/></view>
+    <view class="field"><text class="label">常用地址</text><textarea class="textarea" value="{{profile.address}}" data-key="address" bindinput="input" placeholder="省、市、区及详细地址"/></view>
+  </view>
+  <button class="btn-primary section" bindtap="save">保存资料</button>
+
+  <view class="udp-card card">
+    <view class="udp-head">
+      <view class="status-dot status-{{udpStatus}}"></view>
+      <view class="udp-main"><text class="udp-title">UDP 测试</text><text class="udp-address">{{udpHost}}:{{udpPort}}</text></view>
+      <button class="udp-button" loading="{{testing}}" disabled="{{testing}}" bindtap="testUdp">{{testing ? '测试中' : '开始测试'}}</button>
+    </view>
+    <text class="udp-result">{{udpStatusText}}</text>
+    <text wx:if="{{udpDetail}}" selectable class="udp-detail">{{udpDetail}}</text>
+  </view>
+</view>

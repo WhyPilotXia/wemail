@@ -1,0 +1,21 @@
+<view class="page">
+  <view class="hero discover-hero">
+    <text class="eyebrow">DISCOVER</text>
+    <view class="hero-title">慢一点，也有新发现</view>
+    <view class="hero-desc">读一段故事，参加一次活动，让人与人的连接自然发生。</view>
+  </view>
+  <view class="section">
+    <view class="feature book-feature" bindtap="openBooks">
+      <view class="feature-copy"><text class="feature-label">私人书架</text><text class="feature-title">小说</text><text class="feature-desc">四部作品，五十三章故事</text><text class="feature-action">开始阅读 →</text></view>
+      <view class="book-art"><view class="book-cover one">邮</view><view class="book-cover two">庄</view><view class="book-cover three">股</view></view>
+    </view>
+  </view>
+  <view class="section">
+    <view class="section-head"><text class="section-title">活动广场</text><text class="muted">一起参与</text></view>
+    <view class="event-grid">
+      <view class="event-card lottery" data-type="lottery" bindtap="openEvents"><view class="event-icon">抽</view><text class="event-title">幸运抽奖</text><text class="event-desc">报名参与，等待好运揭晓</text><text class="event-link">查看抽奖</text></view>
+      <view class="event-card signup" data-type="signup" bindtap="openEvents"><view class="event-icon">报</view><text class="event-title">限额报名</text><text class="event-desc">活动席位，先到先得</text><text class="event-link">查看报名</text></view>
+    </view>
+  </view>
+  <view class="quote card"><text class="quote-mark">“</text><text class="quote-text">有些抵达需要时间，有些相遇只差一次发现。</text><text class="quote-from">WeMail</text></view>
+</view>
