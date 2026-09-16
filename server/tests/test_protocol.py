@@ -63,8 +63,20 @@ class ProtocolTests(unittest.TestCase):
         packets = self.server.encode_response("response-1", response)
         envelopes = [json.loads(packet) for packet in packets]
         self.assertEqual(envelopes[0]["z"], 1)
+        self.assertTrue(all(len(packet) <= 1400 for packet in packets))
         compressed = base64.b64decode("".join(item["d"] for item in envelopes))
         restored = json.loads(gzip.decompress(compressed))
+        self.assertEqual(restored, response)
+
+    def test_profile_sized_response_uses_mtu_safe_fragments(self):
+        avatar = "data:image/jpeg;base64," + base64.b64encode(os.urandom(7500)).decode("ascii")
+        response = {"ok": True, "data": {"profile": {"avatarUrl": avatar}}}
+        packets = self.server.encode_response("response-profile", response)
+        envelopes = [json.loads(packet) for packet in packets]
+        self.assertGreater(len(packets), 1)
+        self.assertTrue(all(len(packet) <= 1400 for packet in packets))
+        joined = "".join(item["d"] for item in envelopes)
+        restored = json.loads(gzip.decompress(base64.b64decode(joined))) if envelopes[0]["z"] else json.loads(joined)
         self.assertEqual(restored, response)
 
     def test_small_response_is_not_compressed(self):

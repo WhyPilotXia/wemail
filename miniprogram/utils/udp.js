@@ -1,7 +1,7 @@
 const config = require('../config')
 const pako = require('./pako_inflate.min')
 
-const CHUNK_SIZE = 12000
+const CHUNK_BYTES = 900
 const TIMEOUT_MS = 10000
 const MAX_ATTEMPTS = 4
 const SESSION_KEY = 'wemail_udp_session'
@@ -35,21 +35,35 @@ function bytesToUtf8(buffer) {
   }
 }
 
+function splitUtf8(text, maxBytes) {
+  const chunks = []
+  let chunk = ''
+  let size = 0
+  for (const character of text) {
+    const bytes = unescape(encodeURIComponent(character)).length
+    if (chunk && size + bytes > maxBytes) {
+      chunks.push(chunk)
+      chunk = ''
+      size = 0
+    }
+    chunk += character
+    size += bytes
+  }
+  if (chunk || !chunks.length) chunks.push(chunk)
+  return chunks
+}
+
 function makePackets(requestId, payload) {
   const text = JSON.stringify({ ...payload, timestamp: Date.now() })
-  const total = Math.ceil(text.length / CHUNK_SIZE) || 1
-  const packets = []
-  for (let part = 0; part < total; part += 1) {
-    packets.push(JSON.stringify({
-      v: 2,
-      t: 'q',
-      id: requestId,
-      p: part,
-      n: total,
-      d: text.slice(part * CHUNK_SIZE, (part + 1) * CHUNK_SIZE)
-    }))
-  }
-  return packets
+  const chunks = splitUtf8(text, CHUNK_BYTES)
+  return chunks.map((chunk, part) => JSON.stringify({
+    v: 2,
+    t: 'q',
+    id: requestId,
+    p: part,
+    n: chunks.length,
+    d: chunk
+  }))
 }
 
 function ensureSocket() {

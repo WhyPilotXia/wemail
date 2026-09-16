@@ -40,7 +40,7 @@ def main():
                 continue
             storage.save_profile(openid, {
                 "nickname": row.get("nickname"), "avatar_data": row.get("avatarUrl"),
-                "phone_number": row.get("phoneNumber"), "phone_masked": row.get("phoneMasked"),
+                "phone_number": row.get("phoneNumber"),
                 "contact_id": row.get("contactId"), "contact_name": row.get("contactName"),
                 "address": row.get("address"), "postcode": row.get("postcode"),
             })

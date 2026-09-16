@@ -1,5 +1,14 @@
-server/.env
+.env
+.env.*
+!.env.example
+!server/.env.example
 server/.udp-keypair.json
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
 *.db
 *.db-*
 server/backups/

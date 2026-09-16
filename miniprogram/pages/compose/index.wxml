@@ -1,14 +1,30 @@
 <view class="page">
-  <view class="compose-head"><text class="eyebrow">NEW LETTER</text><view class="hero-title">寄一封信</view><view class="hero-desc">每一封被认真记录的信，都值得被等待。</view></view>
+  <view class="compose-head"><text class="eyebrow">NEW LETTER</text><view class="hero-title">寄一封信</view><view class="hero-desc">选择联系人后核对完整寄件和收件资料。</view></view>
   <view class="form-card card section">
-    <view class="field"><text class="label">寄件人</text><picker range="{{contacts}}" range-key="name" value="{{senderIndex}}" bindchange="selectSender"><view class="picker-value {{senderIndex<0?'placeholder':''}}">{{senderIndex>=0?contacts[senderIndex].name:'请选择寄件人'}} <text>›</text></view></picker></view>
-    <view class="field"><text class="label">收件人</text><picker range="{{contacts}}" range-key="name" value="{{recipientIndex}}" bindchange="selectRecipient"><view class="picker-value {{recipientIndex<0?'placeholder':''}}">{{recipientIndex>=0?contacts[recipientIndex].name:'请选择收件人'}} <text>›</text></view></picker></view>
+    <view class="field"><text class="label">寄件人</text><picker range="{{contacts}}" range-key="pickerLabel" value="{{senderIndex}}" bindchange="selectSender"><view class="picker-value {{senderIndex<0?'placeholder':''}}"><text>{{senderIndex>=0?contacts[senderIndex].pickerLabel:'请选择寄件人'}}</text><text>›</text></view></picker></view>
+    <view class="field"><text class="label">收件人</text><picker range="{{contacts}}" range-key="pickerLabel" value="{{recipientIndex}}" bindchange="selectRecipient"><view class="picker-value {{recipientIndex<0?'placeholder':''}}"><text>{{recipientIndex>=0?contacts[recipientIndex].pickerLabel:'请选择收件人'}}</text><text>›</text></view></picker></view>
     <view class="field"><text class="label">寄出日期</text><picker mode="date" value="{{form.sendDate}}" bindchange="changeDate"><view class="picker-value">{{form.sendDate}} <text>›</text></view></picker></view>
     <view class="field"><text class="label">信件类型</text><picker range="{{mailTypes}}" bindchange="changeType"><view class="picker-value">{{form.mailType}} <text>›</text></view></picker></view>
     <view class="field"><text class="label">邮件编号（选填）</text><input class="input" placeholder="挂号信或包裹的查询编号" value="{{form.trackingNo}}" data-key="trackingNo" bindinput="input"/></view>
     <view class="field"><text class="label">备注（选填）</text><input class="input" placeholder="例如：生日贺卡" value="{{form.title}}" data-key="title" bindinput="input"/></view>
   </view>
-  <view wx:if="{{recipientIndex>=0}}" class="address-card"><text class="address-label">寄送至</text><text class="address-name">{{contacts[recipientIndex].name}}</text><text class="address-text">{{contacts[recipientIndex].postcode1}} {{contacts[recipientIndex].address1 || '未填写地址'}}</text></view>
+  <view wx:if="{{senderIndex>=0}}" class="contact-card sender-card">
+    <text class="contact-label">寄件人资料</text><text class="contact-name">{{contacts[senderIndex].name}}</text>
+    <text wx:if="{{contacts[senderIndex].phone}}" selectable class="contact-line">电话：{{contacts[senderIndex].phone}}</text>
+    <text wx:if="{{contacts[senderIndex].email}}" selectable class="contact-line">邮箱：{{contacts[senderIndex].email}}</text>
+    <text wx:if="{{contacts[senderIndex].qq}}" selectable class="contact-line">QQ：{{contacts[senderIndex].qq}}</text>
+    <text wx:if="{{contacts[senderIndex].address1 || contacts[senderIndex].postcode1}}" selectable class="contact-line">地址1：{{contacts[senderIndex].postcode1}} {{contacts[senderIndex].address1}}</text>
+    <text wx:if="{{contacts[senderIndex].address2 || contacts[senderIndex].postcode2}}" selectable class="contact-line">地址2：{{contacts[senderIndex].postcode2}} {{contacts[senderIndex].address2}}</text>
+  </view>
+  <view wx:if="{{recipientIndex>=0}}" class="contact-card recipient-card">
+    <text class="contact-label">收件人资料</text><text class="contact-name">{{contacts[recipientIndex].name}}</text>
+    <text wx:if="{{contacts[recipientIndex].phone}}" selectable class="contact-line">电话：{{contacts[recipientIndex].phone}}</text>
+    <text wx:if="{{contacts[recipientIndex].email}}" selectable class="contact-line">邮箱：{{contacts[recipientIndex].email}}</text>
+    <text wx:if="{{contacts[recipientIndex].qq}}" selectable class="contact-line">QQ：{{contacts[recipientIndex].qq}}</text>
+    <text wx:if="{{contacts[recipientIndex].address1 || contacts[recipientIndex].postcode1}}" selectable class="contact-line">地址1：{{contacts[recipientIndex].postcode1}} {{contacts[recipientIndex].address1}}</text>
+    <text wx:if="{{contacts[recipientIndex].address2 || contacts[recipientIndex].postcode2}}" selectable class="contact-line">地址2：{{contacts[recipientIndex].postcode2}} {{contacts[recipientIndex].address2}}</text>
+    <text wx:if="{{!contacts[recipientIndex].address1 && !contacts[recipientIndex].address2}}" class="contact-warning">该联系人未填写寄送地址</text>
+  </view>
   <button class="btn-primary submit" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">记录寄出</button>
   <view class="tip">此处记录寄信信息，不包含线上邮寄或付费服务</view>
 </view>

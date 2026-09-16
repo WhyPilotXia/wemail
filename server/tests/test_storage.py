@@ -66,6 +66,43 @@ class StorageTests(unittest.TestCase):
             state = db.execute("SELECT sync_state FROM notion_mails WHERE id=?", (created["pageId"],)).fetchone()[0]
         self.assertEqual(state, "synced")
 
+    def test_notion_contact_null_optional_fields_are_normalized(self):
+        self.storage.replace_notion_contacts([{
+            "id": "contact-null-fields",
+            "name": "测试联系人",
+            "phone": None,
+            "email": None,
+            "address1": None,
+            "postcode1": None,
+            "address2": None,
+            "postcode2": None,
+            "qq": None,
+        }])
+        contact = self.storage.list_notion_contacts()[0]
+        for field in ("phone", "email", "address1", "postcode1", "address2", "postcode2", "qq"):
+            self.assertEqual(contact[field], "")
+
+    def test_notion_contacts_return_all_fields(self):
+        self.storage.replace_notion_contacts([{
+            "id": "contact-full-fields",
+            "name": "完整联系人",
+            "phone": "13800138000",
+            "email": "user@example.com",
+            "address1": "地址一",
+            "postcode1": "610000",
+            "address2": "地址二",
+            "postcode2": "100000",
+            "qq": "12345678",
+        }])
+        contact = self.storage.list_notion_contacts()[0]
+        self.assertEqual(contact["phone"], "13800138000")
+        self.assertEqual(contact["email"], "user@example.com")
+        self.assertEqual(contact["address1"], "地址一")
+        self.assertEqual(contact["postcode1"], "610000")
+        self.assertEqual(contact["address2"], "地址二")
+        self.assertEqual(contact["postcode2"], "100000")
+        self.assertEqual(contact["qq"], "12345678")
+
     def test_sign_is_local_first(self):
         self.storage.replace_notion_contacts([{"id": "sender", "name": "寄件人"}, {"id": "receiver", "name": "收件人"}])
         self.storage.replace_notion_mails([{"pageId": "mail-1", "senderId": "sender", "recipientId": "receiver", "sendDate": "2026-09-16", "received": False}])

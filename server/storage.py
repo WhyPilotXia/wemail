@@ -37,7 +37,6 @@ class Storage:
               nickname TEXT NOT NULL DEFAULT '微信用户',
               avatar_data TEXT NOT NULL DEFAULT '',
               phone_number TEXT NOT NULL DEFAULT '',
-              phone_masked TEXT NOT NULL DEFAULT '',
               contact_id TEXT NOT NULL DEFAULT '',
               contact_name TEXT NOT NULL DEFAULT '',
               address TEXT NOT NULL DEFAULT '',
@@ -151,8 +150,7 @@ class Storage:
     def save_profile(self, openid, patch):
         allowed = {
             "nickname": 200, "avatar_data": 64000, "phone_number": 32,
-            "phone_masked": 32, "contact_id": 100, "contact_name": 200,
-            "address": 300, "postcode": 32,
+            "contact_id": 100, "contact_name": 200, "address": 300, "postcode": 32,
         }
         values = {key: str(value or "")[:allowed[key]] for key, value in patch.items() if key in allowed}
         self.get_profile(openid)
@@ -298,15 +296,19 @@ class Storage:
                 if not contact_id:
                     continue
                 incoming.add(contact_id)
+                values = tuple(str(item.get(key) or "") for key in (
+                    "name", "phone", "email", "address1", "postcode1",
+                    "address2", "postcode2", "qq",
+                ))
                 db.execute("""INSERT INTO notion_contacts(id,name,phone,email,address1,postcode1,address2,postcode2,qq,synced_at)
                   VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,phone=excluded.phone,email=excluded.email,address1=excluded.address1,postcode1=excluded.postcode1,address2=excluded.address2,postcode2=excluded.postcode2,qq=excluded.qq,synced_at=excluded.synced_at""",
-                  (contact_id, item.get("name", ""), item.get("phone", ""), item.get("email", ""), item.get("address1", ""), item.get("postcode1", ""), item.get("address2", ""), item.get("postcode2", ""), item.get("qq", ""), now))
+                  (contact_id, *values, now))
             if incoming:
                 placeholders = ",".join("?" for _ in incoming)
                 db.execute(f"DELETE FROM notion_contacts WHERE id NOT IN ({placeholders})", tuple(incoming))
             db.execute("INSERT INTO sync_meta(key,value,updated_at) VALUES('contacts_last_sync',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at", (now, now))
 
-    def list_notion_contacts(self, profile=None, reveal_phone=False):
+    def list_notion_contacts(self, profile=None):
         profile = profile or {}
         with self.connect() as db:
             rows = db.execute("SELECT * FROM notion_contacts ORDER BY name COLLATE NOCASE").fetchall()
@@ -314,9 +316,6 @@ class Storage:
         for row in rows:
             item = dict(row)
             item.pop("synced_at", None)
-            if not reveal_phone:
-                phone = "".join(char for char in item["phone"] if char.isdigit())
-                item["phone"] = f"{phone[:3]}****{phone[-4:]}" if len(phone) >= 7 else ""
             item["isMe"] = profile.get("contact_id") == item["id"]
             result.append(item)
         return result

@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import socket
 import threading
 import time
@@ -67,14 +68,20 @@ def request(path, method="GET", body=None):
                 detail = json.loads(error.read().decode("utf-8")).get("message")
             except Exception:
                 detail = None
-            LOGGER.warning("notion http_error method=%s path=%s status=%d elapsed_ms=%d", method, path, error.code, int((time.monotonic() - started) * 1000))
-            raise RuntimeError(detail or f"Notion {error.code}") from error
-        except (socket.timeout, TimeoutError, urllib.error.URLError) as error:
+            elapsed = int((time.monotonic() - started) * 1000)
+            retryable = error.code == 429 or 500 <= error.code < 600
+            LOGGER.warning("notion http_error method=%s path=%s status=%d attempt=%d/%d elapsed_ms=%d retryable=%s", method, path, error.code, attempt, attempts, elapsed, retryable)
+            if not retryable or attempt >= attempts:
+                raise RuntimeError(detail or f"Notion {error.code}") from error
+        except (socket.timeout, TimeoutError, ConnectionError, urllib.error.URLError) as error:
             elapsed = int((time.monotonic() - started) * 1000)
             LOGGER.warning("notion network_error method=%s path=%s attempt=%d/%d elapsed_ms=%d error=%s", method, path, attempt, attempts, elapsed, error)
             if attempt >= attempts:
-                raise RuntimeError(f"Notion 网络超时，已尝试 {attempt} 次") from error
-            time.sleep(0.3 * attempt)
+                raise RuntimeError(f"Notion 网络请求失败，已尝试 {attempt} 次") from error
+        delay = config.NOTION_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+        delay += random.uniform(0, min(0.5, delay * 0.25))
+        LOGGER.info("notion retry_wait method=%s path=%s next_attempt=%d delay_seconds=%.2f", method, path, attempt + 1, delay)
+        time.sleep(delay)
 
 
 def read(prop=None):
@@ -128,13 +135,8 @@ def phone_key(value):
     digits = "".join(char for char in str(value or "") if char.isdigit())
     return digits[2:] if digits.startswith("86") and len(digits) == 13 else digits
 
-
-def mask_phone(value):
-    phone = phone_key(value)
-    return f"{phone[:3]}****{phone[-4:]}" if len(phone) >= 7 else ""
-
-
 def fetch_contacts():
+
     result = []
     for row in query_all(config.CONTACT_SOURCE):
         item = contact(row)
@@ -143,13 +145,11 @@ def fetch_contacts():
     return result
 
 
-def contacts(profile=None, reveal_phone=False):
+def contacts(profile=None):
     profile = profile or {}
     result = []
     for source in fetch_contacts():
         item = dict(source)
-        if not reveal_phone:
-            item["phone"] = mask_phone(item["phone"]) if item["phone"] else ""
         item["isMe"] = profile.get("contact_id") == item["id"]
         result.append(item)
     return result

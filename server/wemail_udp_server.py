@@ -95,7 +95,7 @@ class WeMailServer:
     def public_profile(profile):
         return {
             "nickname": profile.get("nickname", "微信用户"), "avatarUrl": profile.get("avatar_data", ""),
-            "phoneMasked": profile.get("phone_masked", ""), "contactId": profile.get("contact_id", ""),
+            "phoneNumber": profile.get("phone_number", ""), "contactId": profile.get("contact_id", ""),
             "contactName": profile.get("contact_name", ""), "address": profile.get("address", ""),
             "postcode": profile.get("postcode", ""),
         }
@@ -116,10 +116,10 @@ class WeMailServer:
         phone = (data.get("phone_info") or {}).get("phoneNumber")
         if not phone:
             raise RuntimeError("未能获取手机号")
-        matches = [item for item in self.storage.list_notion_contacts(reveal_phone=True) if notion_api.phone_key(item["phone"]) == notion_api.phone_key(phone)]
+        matches = [item for item in self.storage.list_notion_contacts() if notion_api.phone_key(item["phone"]) == notion_api.phone_key(phone)]
         if len(matches) > 1:
             raise RuntimeError("该手机号匹配到多位联系人，请联系管理员处理")
-        patch = {"phone_number": notion_api.phone_key(phone), "phone_masked": notion_api.mask_phone(phone)}
+        patch = {"phone_number": notion_api.phone_key(phone)}
         if len(matches) == 1:
             item = matches[0]
             patch.update({"contact_id": item["id"], "contact_name": item["name"], "address": item["address1"], "postcode": item["postcode1"]})
@@ -174,9 +174,9 @@ class WeMailServer:
 
     @staticmethod
     def encode_response(request_id, response):
-        text = json.dumps(response, ensure_ascii=False, separators=(",", ":"))
+        text = json.dumps(response, ensure_ascii=True, separators=(",", ":"))
         compressed = gzip.compress(text.encode("utf-8"), compresslevel=5)
-        use_gzip = len(text.encode("utf-8")) >= 4096 and len(compressed) * 4 // 3 < len(text.encode("utf-8"))
+        use_gzip = len(text) >= 4096 and len(compressed) * 4 // 3 < len(text)
         payload = base64.b64encode(compressed).decode("ascii") if use_gzip else text
         total = max(1, (len(payload) + config.RESPONSE_CHUNK_SIZE - 1) // config.RESPONSE_CHUNK_SIZE)
         return [json.dumps({

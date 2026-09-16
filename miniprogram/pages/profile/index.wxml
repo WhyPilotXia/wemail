@@ -12,7 +12,7 @@
       <view class="stat"><text class="number">{{stats.received}}</text><text>收到</text></view><view class="divider"></view>
       <view class="stat"><text class="number blue">{{stats.unsigned}}</text><text>待签收</text></view>
     </view>
-    <view wx:if="{{!profile.phoneMasked}}" class="bind-card">
+    <view wx:if="{{!profile.phoneNumber}}" class="bind-card">
       <view><text class="bind-title">关联你的信件资料</text><text class="bind-desc">授权手机号后，将自动匹配 Notion 联系人及地址</text></view>
       <button class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="getPhone">手机号快捷登录</button>
     </view>
@@ -20,7 +20,7 @@
       <view class="section-head"><text class="section-title">我的资料</text></view>
       <view class="info-card card">
         <view class="info-row"><text class="info-label">联系人</text><text>{{profile.contactName || '未匹配'}}</text></view>
-        <view class="info-row"><text class="info-label">手机号</text><text>{{profile.phoneMasked || '未绑定'}}</text></view>
+        <view class="info-row"><text class="info-label">手机号</text><text selectable>{{profile.phoneNumber || '未绑定'}}</text></view>
         <view class="info-row"><text class="info-label">地址</text><text class="info-value">{{profile.address || '匹配联系人后自动显示'}}</text></view>
       </view>
     </view>

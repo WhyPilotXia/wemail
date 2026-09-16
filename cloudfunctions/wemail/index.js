@@ -87,11 +87,6 @@ function phoneKey(value) {
   return String(value || '').replace(/[^0-9]/g, '').replace(/^86(?=1\d{10}$)/, '')
 }
 
-function maskPhone(value) {
-  const phone = phoneKey(value)
-  return phone.length >= 7 ? `${phone.slice(0, 3)}****${phone.slice(-4)}` : ''
-}
-
 function publicProfile(profile) {
   const result = { ...profile }
   delete result.phoneNumber
@@ -105,7 +100,7 @@ async function getProfile(openid) {
   return response.data[0] || {
     nickname: '微信用户',
     avatarUrl: '',
-    phoneMasked: '',
+    phoneNumber: '',
     contactId: '',
     contactName: '',
     address: '',
@@ -116,7 +111,7 @@ async function getProfile(openid) {
 async function saveProfile(openid, patch) {
   const response = await db.collection('users').where({ openid }).limit(1).get()
   const safe = {}
-  const fields = ['nickname', 'avatarUrl', 'phoneNumber', 'phoneMasked', 'contactId', 'contactName', 'address', 'postcode']
+  const fields = ['nickname', 'avatarUrl', 'phoneNumber', 'contactId', 'contactName', 'address', 'postcode']
   fields.forEach((key) => {
     if (patch[key] !== undefined) safe[key] = String(patch[key] || '').slice(0, key === 'address' ? 300 : 200)
   })
@@ -134,7 +129,6 @@ async function contacts(openid) {
   const profile = openid ? await getProfile(openid) : {}
   return rows.map(contact).filter((item) => item.name || item.phone).map((item) => ({
     ...item,
-    phone: item.phone ? maskPhone(item.phone) : '',
     isMe: profile.contactId === item.id
   }))
 }
@@ -317,7 +311,7 @@ async function handler(event, openid) {
       const phone = response.phoneInfo && response.phoneInfo.phoneNumber
       if (!phone) throw new Error('未能获取手机号')
       const matches = (await queryAll(CONTACT_SOURCE)).map(contact).filter((item) => phoneKey(item.phone) === phoneKey(phone))
-      const patch = { phoneNumber: phoneKey(phone), phoneMasked: maskPhone(phone) }
+      const patch = { phoneNumber: phoneKey(phone) }
       if (matches.length === 1) Object.assign(patch, { contactId: matches[0].id, contactName: matches[0].name, address: matches[0].address1, postcode: matches[0].postcode1 })
       if (matches.length > 1) throw new Error('该手机号匹配到多位联系人，请联系管理员处理')
       return ok({ profile: publicProfile(await saveProfile(openid, patch)) })

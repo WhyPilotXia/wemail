@@ -1,11 +1,17 @@
 const api = require('../../utils/api')
 const { formatDate } = require('../../utils/date')
 
+function prepare(contact) {
+  const phone = String(contact.phone || '').trim()
+  return { ...contact, pickerLabel: phone ? `${contact.name} · ${phone}` : contact.name }
+}
+
 Page({
   data: { contacts: [], mailTypes: ['平信', '挂号信', '明信片', '包裹'], recipientIndex: -1, senderIndex: -1, form: { sendDate: formatDate(new Date()), mailType: '平信', trackingNo: '', title: '' }, submitting: false },
   onLoad() {
     api.call('contacts.list', {}, { title: '读取通讯录' }).then((contacts) => {
-      this.setData({ contacts, senderIndex: contacts.findIndex((item) => item.isMe) })
+      const prepared = contacts.map(prepare)
+      this.setData({ contacts: prepared, senderIndex: prepared.findIndex((item) => item.isMe) })
     }).catch(() => {})
   },
   selectRecipient(event) { this.setData({ recipientIndex: Number(event.detail.value) }) },
@@ -16,8 +22,11 @@ Page({
   submit() {
     const { recipientIndex, senderIndex, contacts, form } = this.data
     if (recipientIndex < 0 || senderIndex < 0) return wx.showToast({ title: '请选择寄件人和收件人', icon: 'none' })
+    if (recipientIndex === senderIndex) return wx.showToast({ title: '寄件人与收件人不能相同', icon: 'none' })
+    const recipient = contacts[recipientIndex]
+    if (!recipient.address1 && !recipient.address2) return wx.showToast({ title: '收件人没有可用地址', icon: 'none' })
     this.setData({ submitting: true })
-    api.call('mail.create', { ...form, senderId: contacts[senderIndex].id, recipientId: contacts[recipientIndex].id }, { title: '正在寄出' }).then(() => {
+    api.call('mail.create', { ...form, senderId: contacts[senderIndex].id, recipientId: recipient.id }, { title: '正在寄出' }).then(() => {
       wx.showToast({ title: '已记录', icon: 'success' })
       setTimeout(() => wx.navigateBack(), 700)
     }).catch(() => {}).finally(() => this.setData({ submitting: false }))

@@ -9,7 +9,7 @@ Page({
     return api.call('profile.get', {}, { loading: false, silent: true }).then((data) => {
       const profile = data.profile || {}
       profile.initial = (profile.nickname || '我').slice(0, 1)
-      profile.identityText = profile.contactName || (profile.phoneMasked ? '手机号已绑定' : '尚未匹配联系人')
+      profile.identityText = profile.contactName || (profile.phoneNumber ? '手机号已绑定' : '尚未匹配联系人')
       getApp().globalData.profile = profile
       getApp().globalData.openid = data.openid
       this.setData({ ...data, profile, loading: false, loadError: '' })
@@ -51,7 +51,7 @@ Page({
       .then((profile) => {
         const next = { ...this.data.profile, ...profile }
         next.initial = (next.nickname || '我').slice(0, 1)
-        next.identityText = next.contactName || (next.phoneMasked ? '手机号已绑定' : '尚未匹配联系人')
+        next.identityText = next.contactName || (next.phoneNumber ? '手机号已绑定' : '尚未匹配联系人')
         getApp().globalData.profile = next
         this.setData({ profile: next })
         if (showLoading) wx.showToast({ title: '已保存' })

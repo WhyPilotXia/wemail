@@ -1,8 +1,19 @@
 <view class="page">
-  <view class="search card"><text>⌕</text><input placeholder="搜索姓名、电话或 QQ" value="{{keyword}}" bindinput="search"/></view>
-  <view class="count">共 {{filtered.length}} 位联系人</view>
+  <view class="search card"><text>⌕</text><input placeholder="搜索姓名、电话、邮箱、QQ、地址或邮编" value="{{keyword}}" bindinput="search"/></view>
+  <view class="count">共 {{filtered.length}} 位联系人 · 资料完整显示</view>
   <view wx:if="{{loading}}" class="loading">正在读取通讯录...</view>
   <view wx:elif="{{loadError}}" class="error-card card"><text class="error-title">通讯录获取失败</text><text selectable class="error-detail">{{loadError}}</text><button class="btn-ghost error-retry" bindtap="retryLoad">重新获取</button></view>
   <view wx:elif="{{!filtered.length}}" class="card empty">没有找到联系人</view>
-  <view wx:else><view class="contact card" wx:for="{{filtered}}" wx:key="id"><view class="avatar">{{item.name.slice(0,1)}}</view><view class="detail"><text class="name">{{item.name}}</text><text class="meta" wx:if="{{item.phone}}">{{item.phone}}</text><text class="address">{{item.postcode1}} {{item.address1 || '暂无地址'}}</text></view><button class="copy" size="mini" data-value="{{item.name}} {{item.phone}} {{item.postcode1}} {{item.address1}}" bindtap="copy">复制</button></view></view>
+  <view wx:else>
+    <view class="contact card" wx:for="{{filtered}}" wx:key="id">
+      <view class="contact-head"><view class="avatar">{{item.name.slice(0,1)}}</view><view class="title"><text class="name">{{item.name}}</text><text wx:if="{{item.isMe}}" class="me">我</text></view><button class="copy" size="mini" data-value="{{item.copyText}}" bindtap="copy">复制全部</button></view>
+      <view class="detail">
+        <view wx:if="{{item.phone}}" class="data-row"><text class="data-label">电话</text><text selectable class="data-value">{{item.phone}}</text></view>
+        <view wx:if="{{item.email}}" class="data-row"><text class="data-label">邮箱</text><text selectable class="data-value">{{item.email}}</text></view>
+        <view wx:if="{{item.qq}}" class="data-row"><text class="data-label">QQ</text><text selectable class="data-value">{{item.qq}}</text></view>
+        <view wx:if="{{item.address1 || item.postcode1}}" class="data-row"><text class="data-label">地址1</text><text selectable class="data-value">{{item.postcode1}} {{item.address1}}</text></view>
+        <view wx:if="{{item.address2 || item.postcode2}}" class="data-row"><text class="data-label">地址2</text><text selectable class="data-value">{{item.postcode2}} {{item.address2}}</text></view>
+      </view>
+    </view>
+  </view>
 </view>

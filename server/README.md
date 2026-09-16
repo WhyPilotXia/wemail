@@ -10,9 +10,9 @@
 - Notion 暂时不可用时，前台仍可读取本地镜像；待写任务按指数退避自动重试。
 - 业务包采用紧凑 JSON，避免 Base64 约 33% 的体积膨胀和加解密 CPU 开销。
 - 响应超过 4KB 时才尝试 gzip，并且只在压缩后实际更小时启用；小响应不压缩。
-- 单包约 12KB，支持分片、组包、超时重试和请求 ID 幂等缓存。
+- 请求和响应使用约 900B 的 MTU 安全分片，支持组包、超时重试和请求 ID 幂等缓存。
 - `wx.login` code 由服务器向微信 `jscode2session` 换取可信 OpenID。
-- 手机号 code 由服务器调用微信 `getuserphonenumber`，完整手机号不返回小程序。
+- 手机号 code 由服务器调用微信 `getuserphonenumber`，联系人及个人资料使用完整手机号。
 - 用户、活动、报名、阅读进度保存在 `wemail.db`；头像压缩后保存在 SQLite。
 - Notion Token 和 AppSecret 只存服务器 `.env`，不会写入客户端或提交仓库。
 - 服务日志同时输出到控制台和 `logs/wemail-server.log`，单文件 5MB，保留 5 份。
@@ -38,7 +38,7 @@ WECHAT_APP_SECRET=微信公众平台中的小程序AppSecret
 NOTION_TOKEN=现有NotionToken
 ```
 
-注意：当前项目本机的 `server/.env` 已写入 Notion 配置，但 `WECHAT_APP_SECRET` 仍是 `CHANGE_ME`。AppSecret 位于微信公众平台“开发管理 → 开发设置 → 开发者 ID”，不要提交 Git 或发到聊天中。
+`WECHAT_APP_SECRET` 位于微信公众平台“开发管理 → 开发设置 → 开发者 ID”；`NOTION_TOKEN` 由 Notion Integration 提供。两者只写入被 Git 忽略的 `server/.env`，不要提交或发送给他人。其余运行参数均已在 `.env.example` 中提供可复现默认值，可按部署环境调整。
 
 启动：
 
