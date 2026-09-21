@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "邮费试算",
+  "usingComponents": {
+    "postage-calculator": "/components/postage-calculator/index"
+  }
+}

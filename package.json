@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "WeChat miniprogram demo",
   "scripts": {
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:postage": "node scripts/test-postage.js",
+    "sync:postage": "node scripts/sync-postage-data.js"
   },
   "repository": {
     "type": "git",

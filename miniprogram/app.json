@@ -4,6 +4,7 @@
     "pages/discover/index",
     "pages/profile/index",
     "pages/compose/index",
+    "pages/postage/index",
     "pages/contacts/index",
     "pages/events/index",
     "pages/books/index",

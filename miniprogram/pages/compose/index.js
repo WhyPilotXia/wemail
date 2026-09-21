@@ -11,11 +11,17 @@ Page({
   onLoad() {
     api.call('contacts.list', {}, { title: '读取通讯录' }).then((contacts) => {
       const prepared = contacts.map(prepare)
-      this.setData({ contacts: prepared, senderIndex: prepared.findIndex((item) => item.isMe) })
+      const senderIndex = prepared.findIndex((item) => item.isMe)
+      this.setData({ contacts: prepared, senderIndex })
     }).catch(() => {})
   },
-  selectRecipient(event) { this.setData({ recipientIndex: Number(event.detail.value) }) },
-  selectSender(event) { this.setData({ senderIndex: Number(event.detail.value) }) },
+  selectRecipient(event) {
+    this.setData({ recipientIndex: Number(event.detail.value) })
+  },
+  selectSender(event) {
+    this.setData({ senderIndex: Number(event.detail.value) })
+  },
+  openPostage() { wx.navigateTo({ url: '/pages/postage/index' }) },
   changeDate(event) { this.setData({ 'form.sendDate': event.detail.value }) },
   changeType(event) { this.setData({ 'form.mailType': this.data.mailTypes[Number(event.detail.value)] }) },
   input(event) { this.setData({ [`form.${event.currentTarget.dataset.key}`]: event.detail.value }) },

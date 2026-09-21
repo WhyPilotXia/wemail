@@ -1,0 +1,30 @@
+<view class="postage-card card {{compact?'compact':''}}">
+  <view class="postage-head">
+    <view><text class="postage-title">邮费试算</text><text class="postage-subtitle">国内常用邮政业务</text></view>
+    <text class="version">数据 {{sourceVersion}}</text>
+  </view>
+  <view class="field"><text class="label">寄送方式</text><picker range="{{serviceNames}}" value="{{serviceIndex}}" bindchange="changeService"><view class="picker-value"><text>{{serviceNames[serviceIndex]}}</text><text>›</text></view></picker></view>
+  <view wx:if="{{showLocality}}" class="field"><text class="label">寄递范围</text><picker range="{{localityNames}}" value="{{localityIndex}}" bindchange="changeLocality"><view class="picker-value"><text>{{localityNames[localityIndex]}}</text><text>›</text></view></picker></view>
+  <view wx:if="{{needsWeight}}" class="field"><text class="label">重量（克）</text><input class="input" type="digit" placeholder="请输入邮件重量" value="{{form.weight}}" data-key="weight" bindinput="input"/></view>
+  <block wx:if="{{isOrdinaryParcel}}">
+    <view class="field"><text class="label">起寄省</text><picker range="{{originNames}}" value="{{originIndex}}" bindchange="changeOrigin"><view class="picker-value {{originIndex<0?'placeholder':''}}"><text>{{originIndex>=0?originNames[originIndex]:'请选择起寄省'}}</text><text>›</text></view></picker></view>
+    <view class="field"><text class="label">目的省</text><picker range="{{regionNames}}" value="{{destinationIndex}}" bindchange="changeDestination"><view class="picker-value {{destinationIndex<0?'placeholder':''}}"><text>{{destinationIndex>=0?regionNames[destinationIndex]:'请选择目的省'}}</text><text>›</text></view></picker></view>
+    <view class="dimension-title">尺寸（厘米，选填）</view>
+    <view class="dimension-row"><input class="dimension-input" type="digit" placeholder="长" value="{{form.length}}" data-key="length" bindinput="input"/><input class="dimension-input" type="digit" placeholder="宽" value="{{form.width}}" data-key="width" bindinput="input"/><input class="dimension-input" type="digit" placeholder="高" value="{{form.height}}" data-key="height" bindinput="input"/></view>
+    <view class="field"><text class="label">优惠凭证</text><picker range="{{discountNames}}" value="{{discountIndex}}" bindchange="changeDiscount"><view class="picker-value"><text>{{discountNames[discountIndex]}}</text><text>›</text></view></picker></view>
+  </block>
+  <view wx:if="{{showSpecials}}" class="specials">
+    <view wx:if="{{canRegister}}" class="switch-row"><text>挂号</text><switch color="#1769ff" checked="{{form.registered}}" disabled="{{forcedRegistered}}" data-key="registered" bindchange="toggle"/></view>
+    <view wx:if="{{canReceipt}}" class="switch-row"><text>回执</text><switch color="#1769ff" checked="{{form.receipt}}" data-key="receipt" bindchange="toggle"/></view>
+    <view wx:if="{{canAppointed}}" class="switch-row"><text>约投</text><switch color="#1769ff" checked="{{form.appointed}}" data-key="appointed" bindchange="toggle"/></view>
+    <view wx:if="{{canInsure}}" class="switch-row"><text>保价</text><switch color="#1769ff" checked="{{form.insured}}" data-key="insured" bindchange="toggle"/></view>
+    <view wx:if="{{form.insured}}" class="insured-input"><text class="label">保价金额（元）</text><input class="input" type="digit" placeholder="请输入声明价值" value="{{form.declaredValue}}" data-key="declaredValue" bindinput="input"/></view>
+  </view>
+  <view wx:if="{{result}}" class="result-card">
+    <text class="result-label">预计邮费</text><text class="result-price">¥{{result.totalText}}</text>
+    <text wx:for="{{result.details}}" wx:key="*this" class="result-detail">{{item}}</text>
+    <text wx:if="{{result.volumetricText}}" class="result-detail">体积重量 {{result.volumetricText}} 克，按实重与体积重对应资费较高者计</text>
+  </view>
+  <view wx:elif="{{error}}" class="calc-hint">{{error}}</view>
+  <view class="disclaimer">试算结果仅供参考，以实际收费为准</view>
+</view>
