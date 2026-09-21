@@ -27,6 +27,7 @@ CONTACT_SOURCE = os.getenv("CONTACT_DATA_SOURCE_ID", "31e70d82-c716-8034-b23d-00
 MAIL_SOURCE = os.getenv("RAS_DATA_SOURCE_ID", "31e70d82-c716-80ba-b4d2-000b1892f62c")
 MAIL_DATABASE = os.getenv("RAS_DATABASE_ID", "31e70d82-c716-80d3-9f2d-e73dcc4033b3")
 SESSION_DAYS = int(os.getenv("SESSION_DAYS", "30"))
+BIND_TOKEN_SECRET = os.getenv("BIND_TOKEN_SECRET", "") or f"wemail-bind-{WECHAT_APP_ID}"
 MAX_DATAGRAM = int(os.getenv("MAX_DATAGRAM", "65507"))
 RESPONSE_CHUNK_SIZE = max(512, min(1200, int(os.getenv("RESPONSE_CHUNK_SIZE", "900"))))
 MAX_REQUEST_BYTES = int(os.getenv("MAX_REQUEST_BYTES", str(1024 * 1024)))
@@ -35,6 +36,8 @@ NOTION_READ_ATTEMPTS = max(1, int(os.getenv("NOTION_READ_ATTEMPTS", "4")))
 NOTION_RETRY_BASE_SECONDS = max(0.1, float(os.getenv("NOTION_RETRY_BASE_SECONDS", "1")))
 NOTION_SYNC_INTERVAL_SECONDS = int(os.getenv("NOTION_SYNC_INTERVAL_SECONDS", "300"))
 NOTION_OUTBOX_POLL_SECONDS = int(os.getenv("NOTION_OUTBOX_POLL_SECONDS", "2"))
+ADMIN_PHONE = "".join(char for char in os.getenv("ADMIN_PHONE", "") if char.isdigit())
+MAIL_NOTE_ENABLED = os.getenv("MAIL_NOTE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_FILE = os.getenv("LOG_FILE", str(Path(__file__).with_name("logs") / "wemail-server.log"))
 
@@ -45,4 +48,6 @@ def validate():
         missing.append("WECHAT_APP_SECRET")
     if not NOTION_TOKEN:
         missing.append("NOTION_TOKEN")
+    if not ADMIN_PHONE:
+        missing.append("ADMIN_PHONE")
     return missing

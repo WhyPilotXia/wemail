@@ -1,11 +1,33 @@
-const api=require('../../utils/api');const {formatDate,defaultDeadline}=require('../../utils/date')
+const api = require('../../utils/api')
+const { formatDate, defaultDeadline } = require('../../utils/date')
+
 Page({
- data:{tab:'lottery',events:[],loading:true,showForm:false,form:{title:'',description:'',deadline:defaultDeadline(),limit:'',allowNote:false}},
- onLoad(q){this.setData({tab:q.type||'lottery'});this.load()},onPullDownRefresh(){this.load().finally(()=>wx.stopPullDownRefresh())},
- load(){return api.call('events.list',{type:this.data.tab},{loading:false,silent:true}).then(events=>this.setData({events:events.map(e=>({...e,deadlineText:formatDate(e.deadline,true)})),loading:false})).catch(()=>this.setData({loading:false,events:[]}))},
- changeTab(e){this.setData({tab:e.currentTarget.dataset.tab,showForm:false,loading:true});this.load()},toggleForm(){this.setData({showForm:!this.data.showForm})},
- input(e){this.setData({[`form.${e.currentTarget.dataset.key}`]:e.detail.value})},switchNote(e){this.setData({'form.allowNote':e.detail.value})},changeDate(e){this.setData({'form.deadline':`${e.detail.value} 20:00`})},
- create(){const f=this.data.form;if(!f.title.trim())return wx.showToast({title:'请填写标题',icon:'none'});api.call('events.create',{type:this.data.tab,...f,limit:Number(f.limit)||0},{title:'正在发起'}).then(()=>{wx.showToast({title:'发起成功'});this.setData({showForm:false,form:{title:'',description:'',deadline:defaultDeadline(),limit:'',allowNote:false}});this.load()}).catch(()=>{})},
- join(e){api.call('events.join',{eventId:e.currentTarget.dataset.id},{title:'报名中'}).then(()=>{wx.showToast({title:'参与成功'});this.load()}).catch(()=>{})},
- draw(e){api.call('events.draw',{eventId:e.currentTarget.dataset.id},{title:'开奖中'}).then(d=>{wx.showModal({title:'开奖结果',content:d.winnerName?`恭喜 ${d.winnerName}`:'暂无参与者',showCancel:false});this.load()}).catch(()=>{})}
+  data: { tab: 'lottery', events: [], isAdmin: false, loading: true, showForm: false, form: { title: '', description: '', deadline: defaultDeadline(), limit: '' } },
+  onLoad(query) { this.setData({ tab: query.type || 'lottery' }); this.load() },
+  onPullDownRefresh() { this.load().finally(() => wx.stopPullDownRefresh()) },
+  load() {
+    return api.call('events.list', { type: this.data.tab }, { loading: false, silent: true }).then((data) => {
+      const events = Array.isArray(data) ? data : (data.events || [])
+      this.setData({ events: events.map((item) => ({ ...item, deadlineText: formatDate(item.deadline, true) })), isAdmin: Boolean(data && data.isAdmin), loading: false })
+    }).catch(() => this.setData({ loading: false, events: [], isAdmin: false }))
+  },
+  changeTab(event) { this.setData({ tab: event.currentTarget.dataset.tab, showForm: false, loading: true }); this.load() },
+  toggleForm() {
+    if (!this.data.isAdmin) return
+    this.setData({ showForm: !this.data.showForm })
+  },
+  input(event) { this.setData({ [`form.${event.currentTarget.dataset.key}`]: event.detail.value }) },
+  changeDate(event) { this.setData({ 'form.deadline': `${event.detail.value} 20:00` }) },
+  create() {
+    if (!this.data.isAdmin) return wx.showToast({ title: '仅管理员可发布活动', icon: 'none' })
+    const form = this.data.form
+    if (!form.title.trim()) return wx.showToast({ title: '请填写标题', icon: 'none' })
+    api.call('events.create', { type: this.data.tab, ...form, limit: Number(form.limit) || 0 }, { title: '正在发布' }).then(() => {
+      wx.showToast({ title: '发布成功' })
+      this.setData({ showForm: false, form: { title: '', description: '', deadline: defaultDeadline(), limit: '' } })
+      this.load()
+    }).catch(() => {})
+  },
+  join(event) { api.call('events.join', { eventId: event.currentTarget.dataset.id }, { title: '报名中' }).then(() => { wx.showToast({ title: '参与成功' }); this.load() }).catch(() => {}) },
+  draw(event) { api.call('events.draw', { eventId: event.currentTarget.dataset.id }, { title: '开奖中' }).then((data) => { wx.showModal({ title: '开奖结果', content: data.winnerName ? `恭喜 ${data.winnerName}` : '暂无参与者', showCancel: false }); this.load() }).catch(() => {}) }
 })

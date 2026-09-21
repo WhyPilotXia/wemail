@@ -12,7 +12,8 @@ Page({
       this.setData({ records, stats: data.stats || { sent: 0, received: 0, unsigned: 0 }, loading: false, loadError: '' })
       this.applyFilter(this.data.filter)
     }).catch((error) => {
-      this.setData({ loading: false, records: [], displayRecords: [], loadError: api.describeError(error) })
+        const loadError = api.isExpectedError(error) ? '请先在“我的”中输入姓名与手机号关联联系人身份' : api.describeError(error)
+      this.setData({ loading: false, records: [], displayRecords: [], loadError })
       api.showError(error, '信件获取失败')
     })
   },

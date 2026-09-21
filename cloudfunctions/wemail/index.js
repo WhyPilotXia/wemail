@@ -8,6 +8,8 @@ const NOTION_VERSION = process.env.NOTION_VERSION || '2025-09-03'
 const CONTACT_SOURCE = process.env.CONTACT_DATA_SOURCE_ID || '31e70d82-c716-8034-b23d-000ba20878af'
 const MAIL_SOURCE = process.env.RAS_DATA_SOURCE_ID || '31e70d82-c716-80ba-b4d2-000b1892f62c'
 const MAIL_DATABASE = process.env.RAS_DATABASE_ID || '31e70d82-c716-80d3-9f2d-e73dcc4033b3'
+const ADMIN_PHONE = phoneKey(process.env.ADMIN_PHONE)
+const MAIL_NOTE_ENABLED = /^(1|true|yes|on)$/i.test(process.env.MAIL_NOTE_ENABLED || 'false')
 
 const ok = (data) => ({ ok: true, data })
 const fail = (message) => ({ ok: false, message })
@@ -87,9 +89,16 @@ function phoneKey(value) {
   return String(value || '').replace(/[^0-9]/g, '').replace(/^86(?=1\d{10}$)/, '')
 }
 
+function isAdmin(profile) {
+  return Boolean(ADMIN_PHONE && phoneKey(profile.phoneNumber) === ADMIN_PHONE)
+}
+
+function requireContact(profile) {
+  if (!profile.contactId) throw new Error('仅限已关联联系人身份的用户访问，请先在“我的”中输入姓名与手机号关联')
+}
+
 function publicProfile(profile) {
-  const result = { ...profile }
-  delete result.phoneNumber
+  const result = { ...profile, isAdmin: isAdmin(profile) }
   delete result._id
   delete result.openid
   return result
@@ -174,19 +183,22 @@ async function mailList(openid) {
 
 async function createMail(openid, data) {
   const profile = await getProfile(openid)
-  if (!profile.contactId) throw new Error('请先在“我的”中绑定手机号并匹配联系人')
+  requireContact(profile)
   if (data.senderId !== profile.contactId) throw new Error('寄件人必须是当前登录用户')
   const list = await contacts(openid)
   if (!list.some((item) => item.id === data.recipientId)) throw new Error('收件人不存在')
+  const trackingNo = String(data.trackingNo || '').trim().slice(0, 100)
+  if (trackingNo && !/^[A-Za-z0-9-]+$/.test(trackingNo)) throw new Error('邮件编号仅支持字母、数字和连字符')
+  const title = MAIL_NOTE_ENABLED ? String(data.title || '').slice(0, 100) : '由 WeMail 小程序登记'
   const properties = {
-    ' ': { title: [{ text: { content: String(data.title || '由 WeMail 小程序提交').slice(0, 100) } }] },
+    ' ': { title: [{ text: { content: title || '由 WeMail 小程序登记' } }] },
     寄件人: { relation: [{ id: profile.contactId }] },
     收件人: { relation: [{ id: data.recipientId }] },
     寄出日期: { date: { start: data.sendDate } },
     备注: { rich_text: [{ text: { content: String(data.mailType || '平信') } }] },
     签收: { checkbox: false }
   }
-  if (data.trackingNo) properties['邮件编号'] = { rich_text: [{ text: { content: String(data.trackingNo).slice(0, 100) } }] }
+  if (trackingNo) properties['邮件编号'] = { rich_text: [{ text: { content: trackingNo } }] }
   return notion('/pages', 'POST', { parent: { database_id: MAIL_DATABASE }, properties })
 }
 
@@ -306,37 +318,42 @@ async function handler(event, openid) {
     }
     case 'profile.update':
       return ok(publicProfile(await saveProfile(openid, event.patch || {})))
-    case 'profile.bindPhone': {
-      const response = await cloud.openapi.phonenumber.getPhoneNumber({ code: event.code })
-      const phone = response.phoneInfo && response.phoneInfo.phoneNumber
-      if (!phone) throw new Error('未能获取手机号')
-      const matches = (await queryAll(CONTACT_SOURCE)).map(contact).filter((item) => phoneKey(item.phone) === phoneKey(phone))
-      const patch = { phoneNumber: phoneKey(phone) }
-      if (matches.length === 1) Object.assign(patch, { contactId: matches[0].id, contactName: matches[0].name, address: matches[0].address1, postcode: matches[0].postcode1 })
-      if (matches.length > 1) throw new Error('该手机号匹配到多位联系人，请联系管理员处理')
-      return ok({ profile: publicProfile(await saveProfile(openid, patch)) })
-    }
-    case 'contacts.list':
+    case 'profile.bindPhone':
+      throw new Error('手机号快捷登录已下线，请在“我的”中输入姓名与手机号关联联系人身份')
+    case 'contacts.list': {
+      const profile = await getProfile(openid)
+      requireContact(profile)
       return ok(await contacts(openid))
-    case 'mail.list':
+    }
+    case 'mail.list': {
+      const profile = await getProfile(openid)
+      requireContact(profile)
       return ok(await mailList(openid))
+    }
     case 'mail.create':
       await createMail(openid, event)
       return ok({ created: true })
-    case 'mail.sign':
+    case 'mail.sign': {
+      const profile = await getProfile(openid)
+      requireContact(profile)
       await signMail(openid, event.pageId)
       return ok({ signed: true })
-    case 'events.list':
-      return ok(await listEvents(openid, event.type || 'lottery'))
+    }
+    case 'events.list': {
+      const profile = await getProfile(openid)
+      requireContact(profile)
+      return ok({ events: await listEvents(openid, event.type || 'lottery'), isAdmin: isAdmin(profile) })
+    }
     case 'events.create': {
       const profile = await getProfile(openid)
+      requireContact(profile)
+      if (!isAdmin(profile)) throw new Error('仅管理员可以发布活动')
       const document = {
         type: event.type === 'signup' ? 'signup' : 'lottery',
         title: String(event.title || '').slice(0, 80),
         description: String(event.description || '').slice(0, 500),
         deadline: new Date(String(event.deadline).replace(' ', 'T')),
         limit: Math.max(0, Number(event.limit) || 0),
-        allowNote: Boolean(event.allowNote),
         status: 'open',
         participantCount: 0,
         ownerName: profile.contactName || profile.nickname,
@@ -347,10 +364,17 @@ async function handler(event, openid) {
       const result = await db.collection('events').add({ data: document })
       return ok({ _id: result._id })
     }
-    case 'events.join':
+    case 'events.join': {
+      const profile = await getProfile(openid)
+      requireContact(profile)
       return ok(await joinEvent(openid, event.eventId))
-    case 'events.draw':
+    }
+    case 'events.draw': {
+      const profile = await getProfile(openid)
+      requireContact(profile)
+      if (!isAdmin(profile)) throw new Error('仅管理员可以开奖')
       return ok(await drawEvent(openid, event.eventId))
+    }
     case 'reading.get':
       return ok(await getReadingProgress(openid, String(event.book || '')))
     case 'reading.save':

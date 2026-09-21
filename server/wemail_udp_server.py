@@ -25,6 +25,12 @@ class ProtocolError(Exception):
     pass
 
 
+class ContactBindingRequired(PermissionError):
+    """用户未关联联系人身份（未绑定姓名+手机号），前端应静默引导而非弹窗。"""
+
+    CODE = "IDENTITY_REQUIRED"
+
+
 class RateLimiter:
     def __init__(self, limit=240, window=60):
         self.limit = limit
@@ -46,13 +52,15 @@ class RateLimiter:
 
 
 class WeMailServer:
-    def __init__(self):
-        self.storage = Storage()
+    def __init__(self, storage_path=None):
+        self.storage = Storage(storage_path)
         self.fragments = {}
         self.responses = {}
         self.inflight = set()
         self.lock = threading.RLock()
         self.limiter = RateLimiter()
+        self.identity_attempts = defaultdict(deque)
+        self.identity_lock = threading.Lock()
 
     @staticmethod
     def wechat_get(path, params):
@@ -92,13 +100,38 @@ class WeMailServer:
         return token
 
     @staticmethod
-    def public_profile(profile):
+    def is_admin(profile):
+        phone = notion_api.phone_key(profile.get("phone_number"))
+        return bool(config.ADMIN_PHONE and phone == config.ADMIN_PHONE)
+
+    @staticmethod
+    def require_contact(profile):
+        if not profile.get("contact_id"):
+            raise ContactBindingRequired("仅限已关联联系人身份的用户访问，请先在‘我的’中输入姓名与手机号关联")
+
+    @classmethod
+    def public_profile(cls, profile, contact=None):
+        contact = contact or {}
         return {
             "nickname": profile.get("nickname", "微信用户"), "avatarUrl": profile.get("avatar_data", ""),
             "phoneNumber": profile.get("phone_number", ""), "contactId": profile.get("contact_id", ""),
             "contactName": profile.get("contact_name", ""), "address": profile.get("address", ""),
-            "postcode": profile.get("postcode", ""),
+            "postcode": profile.get("postcode", ""), "isAdmin": cls.is_admin(profile),
+            "contactPhone": contact.get("phone", ""), "contactEmail": contact.get("email", ""),
+            "contactAddress1": contact.get("address1", ""), "contactPostcode1": contact.get("postcode1", ""),
+            "contactAddress2": contact.get("address2", ""), "contactPostcode2": contact.get("postcode2", ""),
+            "contactQq": contact.get("qq", ""),
         }
+
+    def profile_contact(self, profile):
+        """取当前用户绑定联系人的完整 Notion 缓存数据；未绑定返回空 dict。"""
+        contact_id = profile.get("contact_id")
+        if not contact_id:
+            return {}
+        for item in self.storage.list_notion_contacts():
+            if item["id"] == contact_id:
+                return item
+        return {}
 
     def login(self, code):
         if not config.WECHAT_APP_SECRET:
@@ -125,6 +158,33 @@ class WeMailServer:
             patch.update({"contact_id": item["id"], "contact_name": item["name"], "address": item["address1"], "postcode": item["postcode1"]})
         return {"profile": self.public_profile(self.storage.save_profile(openid, patch))}
 
+    def bind_identity(self, openid, event):
+        name = str(event.get("name") or "").strip()[:100]
+        phone = str(event.get("phone") or "").strip()[:32]
+        confirm_token = str(event.get("confirmToken") or "")[:128]
+        nickname = str(event.get("nickname") or "")[:200]
+        force = bool(event.get("force"))
+        now = time.time()
+        with self.identity_lock:
+            queue = self.identity_attempts[openid]
+            while queue and queue[0] <= now - 600:
+                queue.popleft()
+            if len(queue) >= 5:
+                raise PermissionError("验证尝试过于频繁，请 10 分钟后再试")
+        try:
+            if not confirm_token:
+                result = self.storage.bind_verification(openid, name, phone)
+                if result["state"] == "bound_self":
+                    result.pop("confirmToken", None)
+                return result
+            if force:
+                return self.storage.force_transfer_binding(openid, nickname, confirm_token)
+            return self.storage.confirm_binding(openid, nickname, confirm_token)
+        except (ValueError, RuntimeError, PermissionError):
+            with self.identity_lock:
+                self.identity_attempts[openid].append(time.time())
+            raise
+
     def dispatch(self, event):
         action = str(event.get("action") or "")
         if action == "auth.login":
@@ -135,36 +195,57 @@ class WeMailServer:
         profile = self.storage.get_profile(openid)
         if action == "profile.get":
             mail = self.storage.list_notion_mails(profile)
-            return {"openid": openid, "profile": self.public_profile(profile), "stats": mail["stats"], "recent": mail["records"][:3], "sync": self.storage.sync_status()}
+            return {"openid": openid, "profile": self.public_profile(profile, self.profile_contact(profile)), "stats": mail["stats"], "recent": mail["records"][:3], "sync": self.storage.sync_status()}
         if action == "profile.update":
             patch = event.get("patch") or {}
             mapping = {"nickname": "nickname", "avatarData": "avatar_data", "address": "address", "postcode": "postcode"}
             converted = {target: patch[source] for source, target in mapping.items() if source in patch}
             if len(converted.get("avatar_data", "")) > 64000:
                 raise ValueError("头像过大，请选择更小的图片")
-            return self.public_profile(self.storage.save_profile(openid, converted))
-        if action == "profile.bindPhone":
-            return self.bind_phone(openid, str(event.get("code") or ""))
+            profile = self.storage.save_profile(openid, converted)
+            # 联系人字段走 Notion 写回链路（contactId 不可改，姓名不可改）
+            contact_patch = {key: patch[key] for key in notion_api.CONTACT_PROPERTY_TYPES if key in patch}
+            if contact_patch:
+                self.storage.update_contact(openid, profile, contact_patch)
+            return self.public_profile(profile, self.profile_contact(profile))
+        if action == "contact.update":
+            self.require_contact(profile)
+            self.storage.update_contact(openid, profile, event.get("patch") or event.get("fields") or {})
+            return {"profile": self.public_profile(self.storage.get_profile(openid), self.profile_contact(self.storage.get_profile(openid)))}
+        if action == "profile.bindIdentity":
+            return self.bind_identity(openid, event)
         if action == "contacts.list":
+            self.require_contact(profile)
             contacts = self.storage.list_notion_contacts(profile)
             if not contacts and not self.storage.sync_status()["contactsLastSync"]:
                 raise RuntimeError("通讯录尚未完成首次同步，请稍后重试并检查服务端 Notion 日志")
             return contacts
         if action == "mail.list":
+            self.require_contact(profile)
             result = self.storage.list_notion_mails(profile)
             result["sync"] = self.storage.sync_status()
             return result
         if action == "mail.create":
+            self.require_contact(profile)
             return self.storage.create_local_mail(profile, event)
         if action == "mail.sign":
+            self.require_contact(profile)
             return self.storage.sign_local_mail(profile, str(event.get("pageId") or ""))
         if action == "events.list":
-            return self.storage.list_events(openid, str(event.get("type") or "lottery"))
+            self.require_contact(profile)
+            return {"events": self.storage.list_events(openid, str(event.get("type") or "lottery")), "isAdmin": self.is_admin(profile)}
         if action == "events.create":
+            self.require_contact(profile)
+            if not self.is_admin(profile):
+                raise PermissionError("仅管理员可以发布活动")
             return self.storage.create_event(openid, profile, event)
         if action == "events.join":
-            return self.storage.join_event(openid, profile, str(event.get("eventId") or ""), event.get("note"))
+            self.require_contact(profile)
+            return self.storage.join_event(openid, profile, str(event.get("eventId") or ""))
         if action == "events.draw":
+            self.require_contact(profile)
+            if not self.is_admin(profile):
+                raise PermissionError("仅管理员可以开奖")
             return self.storage.draw_event(openid, str(event.get("eventId") or ""))
         if action == "reading.get":
             return self.storage.get_progress(openid, str(event.get("book") or ""))
@@ -250,6 +331,8 @@ class WeMailServer:
         LOGGER.info("request start id=%s action=%s ip=%s port=%d", request_id, action, address[0], address[1])
         try:
             response = {"ok": True, "data": self.dispatch(event)}
+        except ContactBindingRequired as error:
+            response = {"ok": False, "code": error.CODE, "message": str(error), "requestId": request_id}
         except PermissionError as error:
             response = {"ok": False, "code": "UNAUTHORIZED", "message": str(error), "requestId": request_id}
         except Exception as error:

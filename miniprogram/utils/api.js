@@ -10,10 +10,16 @@ function describeError(error) {
   return details.length ? `${message}\n${details.join(' · ')}` : message
 }
 
+function isExpectedError(error) {
+  if (error && error.code === 'IDENTITY_REQUIRED') return true
+  const message = String((error && error.message) || '')
+  return ['仅限已关联联系人身份', '请先在‘我的’中关联联系人身份', '请先在‘我的’中输入姓名与手机号', '仅限联系人表中已登记手机号'].some((text) => message.includes(text))
+}
+
 function showError(error, title = '获取失败') {
-  const content = describeError(error)
   console.error('[API] request failed', { message: error && error.message, requestId: error && error.requestId, action: error && error.action, attempts: error && error.attempts, elapsed: error && error.elapsed })
-  wx.showModal({ title, content, showCancel: false })
+  if (isExpectedError(error)) return
+  wx.showModal({ title, content: describeError(error), showCancel: false })
 }
 
 function call(action, data = {}, options = {}) {
@@ -36,4 +42,4 @@ function call(action, data = {}, options = {}) {
   })
 }
 
-module.exports = { call, describeError, showError }
+module.exports = { call, describeError, isExpectedError, showError }

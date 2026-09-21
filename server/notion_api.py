@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+import re
 import socket
 import threading
 import time
@@ -135,6 +136,20 @@ def phone_key(value):
     digits = "".join(char for char in str(value or "") if char.isdigit())
     return digits[2:] if digits.startswith("86") and len(digits) == 13 else digits
 
+
+def name_key(value):
+    """去掉姓名中括号及其内部内容（支持中英文括号，含嵌套），strip 后用于身份匹配。
+
+    Notion 联系人姓名常为“姓名（昵称）”格式，用户输入纯姓名时应仍可匹配。
+    """
+    text = str(value or "").strip()
+    for pattern in (r"（[^（）]*）", r"\([^()]*\)"):
+        previous = None
+        while previous != text:
+            previous = text
+            text = re.sub(pattern, "", text)
+    return text.strip()
+
 def fetch_contacts():
 
     result = []
@@ -209,7 +224,7 @@ def mail_list(profile):
 
 def create_mail_remote(data):
     properties = {
-        " ": {"title": [{"text": {"content": str(data.get("title") or "由 WeMail 小程序提交")[:100]}}]},
+        " ": {"title": [{"text": {"content": str(data.get("title") or "由 WeMail 小程序登记")[:100]}}]},
         "寄件人": {"relation": [{"id": data["senderId"]}]},
         "收件人": {"relation": [{"id": data["recipientId"]}]},
         "寄出日期": {"date": {"start": data.get("sendDate")}},
@@ -220,6 +235,39 @@ def create_mail_remote(data):
         properties["邮件编号"] = {"rich_text": [{"text": {"content": str(data["trackingNo"])[:100]}}]}
     result = request("/pages", "POST", {"parent": {"database_id": config.MAIL_DATABASE}, "properties": properties})
     return result["id"]
+
+
+CONTACT_PROPERTY_TYPES = {
+    "phone": ("电话", "phone_number"),
+    "email": ("电子邮箱", "email"),
+    "address1": ("地址1", "rich_text"),
+    "postcode1": ("邮编1", "rich_text"),
+    "address2": ("地址2", "rich_text"),
+    "postcode2": ("邮编2", "rich_text"),
+    "qq": ("QQ", "rich_text"),
+}
+
+
+def contact_update_properties(fields):
+    """把内部字段名映射为 Notion 属性更新负载；空串代表清空该属性。"""
+    properties = {}
+    for field, value in fields.items():
+        entry = CONTACT_PROPERTY_TYPES.get(field)
+        if not entry:
+            raise ValueError(f"不支持修改的字段：{field}")
+        prop_name, prop_type = entry
+        text = str(value or "").strip()
+        if prop_type == "rich_text":
+            properties[prop_name] = {"rich_text": [{"text": {"content": text}}] if text else []}
+        elif prop_type == "phone_number":
+            properties[prop_name] = {"phone_number": text or None}
+        elif prop_type == "email":
+            properties[prop_name] = {"email": text or None}
+    return properties
+
+
+def update_contact_remote(page_id, properties):
+    request(f"/pages/{page_id}", "PATCH", {"properties": properties})
 
 
 def sign_mail_remote(page_id):

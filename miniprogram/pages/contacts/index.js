@@ -29,7 +29,8 @@ Page({
       const prepared = contacts.map(prepare)
       this.setData({ contacts: prepared, filtered: prepared, loading: false, loadError: '' })
     }).catch((error) => {
-      this.setData({ loading: false, contacts: [], filtered: [], loadError: api.describeError(error) })
+        const loadError = api.isExpectedError(error) ? '请先在“我的”中输入姓名与手机号关联联系人身份' : api.describeError(error)
+      this.setData({ loading: false, contacts: [], filtered: [], loadError })
       api.showError(error, '通讯录获取失败')
     })
   },

@@ -1,10 +1,10 @@
 <view class="page">
   <view class="hero">
     <text class="eyebrow">WEMAIL · LETTERS</text>
-    <view class="hero-title">让等待，重新有意义</view>
-    <view class="hero-desc">记录寄出的心意，也不错过每一次抵达。</view>
+    <view class="hero-title">线下邮件，清晰登记</view>
+    <view class="hero-desc">寄件记录仅寄件人与收件人可见。</view>
     <view class="hero-actions">
-      <button class="btn-primary hero-btn" bindtap="compose">写一封信</button>
+      <button class="btn-primary hero-btn" bindtap="compose">登记寄件</button>
       <button class="contact-btn" bindtap="contacts">通讯录</button>
     </view>
   </view>
@@ -23,7 +23,7 @@
     </scroll-view>
     <view wx:if="{{loading}}" class="loading">正在整理信箱...</view>
     <view wx:elif="{{loadError}}" class="error-card card"><text class="error-title">信件获取失败</text><text selectable class="error-detail">{{loadError}}</text><button class="btn-ghost error-retry" bindtap="retryLoad">重新获取</button></view>
-    <view wx:elif="{{!displayRecords.length}}" class="card empty"><view class="empty-icon">✉</view><view>信箱还是空的</view><view class="empty-sub">从寄出第一封信开始吧</view></view>
+    <view wx:elif="{{!displayRecords.length}}" class="card empty"><view class="empty-icon">✉</view><view>暂无寄件记录</view><view class="empty-sub">登记一条线下邮件信息吧</view></view>
     <view wx:else class="mail-list">
       <view class="mail-item card" wx:for="{{displayRecords}}" wx:key="pageId">
         <view class="mail-top"><view><text class="mail-type">{{item.mailType || '平信'}}</text><text class="mail-date">{{item.dateText}}</text></view><text class="status {{item.received?'done':'pending'}}">{{item.received?'已签收':'待签收'}}</text></view>

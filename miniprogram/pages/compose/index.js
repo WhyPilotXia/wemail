@@ -7,7 +7,7 @@ function prepare(contact) {
 }
 
 Page({
-  data: { contacts: [], mailTypes: ['平信', '挂号信', '明信片', '包裹'], recipientIndex: -1, senderIndex: -1, form: { sendDate: formatDate(new Date()), mailType: '平信', trackingNo: '', title: '' }, submitting: false },
+  data: { contacts: [], mailTypes: ['平信', '挂号信', '明信片', '包裹'], recipientIndex: -1, senderIndex: -1, form: { sendDate: formatDate(new Date()), mailType: '平信', trackingNo: '' }, submitting: false },
   onLoad() {
     api.call('contacts.list', {}, { title: '读取通讯录' }).then((contacts) => {
       const prepared = contacts.map(prepare)
@@ -25,9 +25,10 @@ Page({
     if (recipientIndex === senderIndex) return wx.showToast({ title: '寄件人与收件人不能相同', icon: 'none' })
     const recipient = contacts[recipientIndex]
     if (!recipient.address1 && !recipient.address2) return wx.showToast({ title: '收件人没有可用地址', icon: 'none' })
+    if (form.trackingNo && !/^[A-Za-z0-9-]+$/.test(form.trackingNo.trim())) return wx.showToast({ title: '邮件编号仅支持字母、数字和连字符', icon: 'none' })
     this.setData({ submitting: true })
-    api.call('mail.create', { ...form, senderId: contacts[senderIndex].id, recipientId: recipient.id }, { title: '正在寄出' }).then(() => {
-      wx.showToast({ title: '已记录', icon: 'success' })
+    api.call('mail.create', { ...form, trackingNo: form.trackingNo.trim(), senderId: contacts[senderIndex].id, recipientId: recipient.id }, { title: '正在保存' }).then(() => {
+      wx.showToast({ title: '寄件记录已保存', icon: 'success' })
       setTimeout(() => wx.navigateBack(), 700)
     }).catch(() => {}).finally(() => this.setData({ submitting: false }))
   }

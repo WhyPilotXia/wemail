@@ -1,3 +1,4 @@
+import hashlib
 import json
 import secrets
 import sqlite3
@@ -6,11 +7,21 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 import config
+from notion_api import name_key
+
+
+class ContactBindingRequiredError(PermissionError):
+    """用户未关联联系人身份，对应服务层 IDENTITY_REQUIRED 预期错误。"""
+
+
+def phone_key(value):
+    digits = "".join(char for char in str(value or "") if char.isdigit())
+    return digits[2:] if digits.startswith("86") and len(digits) == 13 else digits
 
 
 class Storage:
-    def __init__(self, path=config.DATABASE_PATH):
-        self.path = path
+    def __init__(self, path=None):
+        self.path = path or config.DATABASE_PATH
         self.lock = threading.RLock()
         self.init_schema()
 
@@ -91,6 +102,14 @@ class Storage:
               updated_at TEXT NOT NULL,
               UNIQUE(openid, book)
             );
+            CREATE TABLE IF NOT EXISTS contact_bindings (
+              contact_id TEXT PRIMARY KEY,
+              openid TEXT NOT NULL,
+              nickname TEXT NOT NULL DEFAULT '',
+              bound_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_bindings_openid ON contact_bindings(openid);
             CREATE TABLE IF NOT EXISTS notion_contacts (
               id TEXT PRIMARY KEY,
               name TEXT NOT NULL DEFAULT '',
@@ -182,6 +201,119 @@ class Storage:
             return None
         return row["openid"]
 
+    def bind_verification(self, openid, name, phone):
+        """核验姓名+手机号是否命中本地 Notion 联系人缓存。
+
+        返回 state（pending / bound_self / bound_other）与联系人信息；
+        pending 时附带 confirm_token，确认绑定和强绑解绑都须回传该令牌。
+        """
+        key = phone_key(phone)
+        if not key:
+            raise ValueError("请输入有效的手机号")
+        name_match = name_key(name)
+        matches = [item for item in self.list_notion_contacts() if phone_key(item["phone"]) == key and name_key(item["name"]) == name_match]
+        if not matches:
+            raise ValueError("未在联系人表中找到该姓名与手机号，请核对后重试")
+        if len(matches) > 1:
+            raise RuntimeError("该手机号匹配到多位同名联系人，请联系管理员处理")
+        contact = matches[0]
+        confirm_token = self._bind_token(openid, contact["id"])
+        existing = self.get_binding(contact["id"])
+        if existing:
+            info = {"contactId": contact["id"], "contactName": contact["name"], "phoneNumber": key, "boundNickname": existing["nickname"], "boundOpenid": existing["openid"], "confirmToken": confirm_token}
+            return {"state": "bound_self" if existing["openid"] == openid else "bound_other", **info}
+        return {"state": "pending", "contactId": contact["id"], "contactName": contact["name"], "phoneNumber": key, "confirmToken": confirm_token}
+
+    def confirm_binding(self, openid, nickname, confirm_token):
+        """凭 confirm_token 执行绑定；bound_other 时须 force=True 强制解绑原账户。"""
+        contact = self._contact_for_token(openid, confirm_token)
+        contact_id = contact["id"]
+        existing = self.get_binding(contact_id)
+        if existing and existing["openid"] != openid:
+            raise PermissionError("当前身份信息已被其他账户绑定，请返回重新验证")
+        self.get_profile(openid)
+        now = self.now()
+        with self.lock, self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            nickname = str(nickname or "微信用户")[:200]
+            db.execute(
+                """INSERT INTO contact_bindings(contact_id,openid,nickname,bound_at,updated_at) VALUES(?,?,?,?,?)
+                  ON CONFLICT(contact_id) DO UPDATE SET openid=excluded.openid,nickname=excluded.nickname,updated_at=excluded.updated_at""",
+                (contact_id, openid, nickname, now, now),
+            )
+            patch = {
+                "phone_number": phone_key(contact["phone"]),
+                "contact_id": contact_id,
+                "contact_name": contact["name"],
+                "address": contact["address1"] or "",
+                "postcode": contact["postcode1"] or "",
+            }
+            columns = ",".join(f"{key}=?" for key in patch)
+            db.execute(f"UPDATE users SET {columns},updated_at=? WHERE openid=?", (*patch.values(), now, openid))
+        return {"profile": self.public_profile(self.get_profile(openid))}
+
+    def force_transfer_binding(self, openid, nickname, confirm_token):
+        """将已被他人绑定的联系人转移到当前 openid，原 openid 的联系人快照字段被清空。"""
+        contact = self._contact_for_token(openid, confirm_token)
+        contact_id = contact["id"]
+        existing = self.get_binding(contact_id)
+        if not existing or existing["openid"] == openid:
+            return self.confirm_binding(openid, nickname, confirm_token)
+        previous_openid = existing["openid"]
+        self.get_profile(openid)
+        now = self.now()
+        with self.lock, self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            nickname = str(nickname or "微信用户")[:200]
+            db.execute(
+                """INSERT INTO contact_bindings(contact_id,openid,nickname,bound_at,updated_at) VALUES(?,?,?,?,?)
+                  ON CONFLICT(contact_id) DO UPDATE SET openid=excluded.openid,nickname=excluded.nickname,updated_at=excluded.updated_at""",
+                (contact_id, openid, nickname, now, now),
+            )
+            patch = {
+                "phone_number": phone_key(contact["phone"]),
+                "contact_id": contact_id,
+                "contact_name": contact["name"],
+                "address": contact["address1"] or "",
+                "postcode": contact["postcode1"] or "",
+            }
+            columns = ",".join(f"{key}=?" for key in patch)
+            db.execute(f"UPDATE users SET {columns},updated_at=? WHERE openid=?", (*patch.values(), now, openid))
+            db.execute(
+                "UPDATE users SET phone_number='',contact_id='',contact_name='',address='',postcode='',updated_at=? WHERE openid=?",
+                (now, previous_openid),
+            )
+        return {"profile": self.public_profile(self.get_profile(openid))}
+
+    def get_binding(self, contact_id):
+        if not contact_id:
+            return None
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM contact_bindings WHERE contact_id=?", (contact_id,)).fetchone()
+        return dict(row) if row else None
+
+    def _contact_for_token(self, openid, confirm_token):
+        for item in self.list_notion_contacts():
+            if self._bind_token(openid, item["id"]) == confirm_token:
+                return item
+        raise ValueError("验证已过期，请返回重新验证")
+
+    def _bind_token(self, openid, contact_id):
+        material = f"{openid}:{contact_id}:{config.BIND_TOKEN_SECRET}".encode("utf-8")
+        return hashlib.sha256(material).hexdigest()
+
+    @staticmethod
+    def public_profile(profile):
+        return {
+            "nickname": profile.get("nickname", "微信用户"),
+            "avatarUrl": profile.get("avatar_data", ""),
+            "phoneNumber": profile.get("phone_number", ""),
+            "contactId": profile.get("contact_id", ""),
+            "contactName": profile.get("contact_name", ""),
+            "address": profile.get("address", ""),
+            "postcode": profile.get("postcode", ""),
+        }
+
     def list_events(self, openid, event_type):
         with self.connect() as db:
             rows = db.execute("SELECT * FROM events WHERE type=? ORDER BY created_at DESC LIMIT 50", (event_type,)).fetchall()
@@ -192,7 +324,7 @@ class Storage:
             item = dict(row)
             item["_id"] = item.pop("id")
             item["limit"] = item.pop("participant_limit")
-            item["allowNote"] = bool(item.pop("allow_note"))
+            item.pop("allow_note", None)
             item["participantCount"] = item.pop("participant_count")
             item["ownerName"] = item.pop("owner_name")
             owner = item.pop("owner_openid")
@@ -214,12 +346,12 @@ class Storage:
             raise ValueError("请填写标题和截止时间")
         with self.connect() as db:
             db.execute(
-                "INSERT INTO events(id,type,title,description,deadline,participant_limit,allow_note,status,owner_name,owner_openid,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-                (event_id, "signup" if data.get("type") == "signup" else "lottery", str(data["title"])[:80], str(data.get("description") or "")[:500], deadline, max(0, int(data.get("limit") or 0)), int(bool(data.get("allowNote"))), "open", profile.get("contact_name") or profile.get("nickname") or "微信用户", openid, now, now),
+                "INSERT INTO events(id,type,title,description,deadline,participant_limit,status,owner_name,owner_openid,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (event_id, "signup" if data.get("type") == "signup" else "lottery", str(data["title"])[:80], str(data.get("description") or "")[:500], deadline, max(0, int(data.get("limit") or 0)), "open", profile.get("contact_name") or profile.get("nickname") or "微信用户", openid, now, now),
             )
         return {"_id": event_id}
 
-    def join_event(self, openid, profile, event_id, note=""):
+    def join_event(self, openid, profile, event_id):
         with self.lock, self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             event = db.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone()
@@ -238,8 +370,8 @@ class Storage:
                 raise ValueError("报名人数已满")
             next_count = count + 1
             db.execute(
-                "INSERT INTO event_entries(id,event_id,openid,name,avatar_data,note,created_at) VALUES(?,?,?,?,?,?,?)",
-                (secrets.token_hex(16), event_id, openid, profile.get("contact_name") or profile.get("nickname") or "微信用户", profile.get("avatar_data") or "", str(note or "")[:500], self.now()),
+                "INSERT INTO event_entries(id,event_id,openid,name,avatar_data,created_at) VALUES(?,?,?,?,?,?)",
+                (secrets.token_hex(16), event_id, openid, profile.get("contact_name") or profile.get("nickname") or "微信用户", profile.get("avatar_data") or "", self.now()),
             )
             db.execute("UPDATE events SET participant_count=?,status=?,updated_at=? WHERE id=?", (next_count, "full" if limit and next_count >= limit else "open", self.now(), event_id))
         return {"joined": True}
@@ -320,6 +452,74 @@ class Storage:
             result.append(item)
         return result
 
+    CONTACT_FIELD_LIMITS = {"phone": 32, "email": 200, "address1": 300, "postcode1": 32, "address2": 300, "postcode2": 32, "qq": 20}
+
+    def update_contact(self, openid, profile, patch):
+        """修改自己绑定的 Notion 联系人资料：本地缓存即时生效，Notion 异步写回。
+
+        Notion 是联系人资料的权威源；本方法先写本地 notion_contacts 供前端即时显示，
+        再通过 notion_outbox 异步 PATCH Notion 页面。若同步失败（Notion 不可达等），
+        下一次拉取同步会用 Notion 原值覆盖本地缓存，保持权威源语义。
+        """
+        contact_id = profile.get("contact_id")
+        if not contact_id:
+            raise ContactBindingRequiredError("请先在‘我的’中关联联系人身份")
+        fields = {}
+        for key, value in (patch or {}).items():
+            if key not in self.CONTACT_FIELD_LIMITS:
+                raise ValueError(f"不支持修改的字段： {key}")
+            text = str(value or "").strip()
+            if len(text) > self.CONTACT_FIELD_LIMITS[key]:
+                raise ValueError(f"{key} 内容过长")
+            fields[key] = text
+        if not fields:
+            raise ValueError("没有需要修改的字段")
+        contact = None
+        with self.lock, self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM notion_contacts WHERE id=?", (contact_id,)).fetchone()
+            if not row:
+                raise ValueError("联系人不存在或通讯录尚未同步，请稍后重试")
+            contact = dict(row)
+            binding = db.execute("SELECT openid FROM contact_bindings WHERE contact_id=?", (contact_id,)).fetchone()
+            if not binding or binding["openid"] != openid:
+                raise PermissionError("仅绑定该联系人资料的账户可以修改")
+            columns = []
+            values = []
+            for key, value in fields.items():
+                columns.append(f"{key}=?")
+                values.append(value)
+            columns.append("synced_at=?")
+            now = self.now()
+            values.append(now)
+            db.execute(f"UPDATE notion_contacts SET {','.join(columns)} WHERE id=?", (*values, contact_id))
+            payload = {"contactId": contact_id, "fields": fields}
+            db.execute("INSERT INTO notion_outbox(operation,entity_id,payload,next_attempt_at,created_at) VALUES('contact.update',?,?,?,?)", (contact_id, json.dumps(payload, ensure_ascii=False), now, now))
+        # 保持 users 快照字段与联系人地址/邮编一致（寄件地址默认地址1）
+        snapshot_patch = {}
+        if "address1" in fields:
+            snapshot_patch["address"] = fields["address1"]
+        if "postcode1" in fields:
+            snapshot_patch["postcode"] = fields["postcode1"]
+        if "phone" in fields:
+            snapshot_patch["phone_number"] = phone_key(fields["phone"])
+        if snapshot_patch:
+            self.save_profile(openid, snapshot_patch)
+        return {"contact": self.contact_public(dict(row=contact, **fields))}
+
+    def contact_public(self, contact):
+        return {
+            "id": contact.get("id", ""),
+            "name": contact.get("name", ""),
+            "phone": contact.get("phone", ""),
+            "email": contact.get("email", ""),
+            "address1": contact.get("address1", ""),
+            "postcode1": contact.get("postcode1", ""),
+            "address2": contact.get("address2", ""),
+            "postcode2": contact.get("postcode2", ""),
+            "qq": contact.get("qq", ""),
+        }
+
     def replace_notion_mails(self, mails):
         now = self.now()
         with self.lock, self.connect() as db:
@@ -355,7 +555,7 @@ class Storage:
 
     def create_local_mail(self, profile, data):
         if not profile.get("contact_id"):
-            raise ValueError("请先在‘我的’中绑定手机号并匹配联系人")
+            raise ValueError("请先在‘我的’中关联联系人身份")
         if data.get("senderId") != profile["contact_id"]:
             raise ValueError("寄件人必须是当前登录用户")
         with self.connect() as db:
@@ -363,7 +563,11 @@ class Storage:
                 raise ValueError("收件人不存在或通讯录尚未同步")
             local_id = "local-" + secrets.token_hex(12)
             now = self.now()
-            payload = {"localId": local_id, "senderId": profile["contact_id"], "recipientId": data.get("recipientId"), "sendDate": data.get("sendDate"), "mailType": str(data.get("mailType") or "平信")[:100], "trackingNo": str(data.get("trackingNo") or "")[:100], "title": str(data.get("title") or "由 WeMail 小程序提交")[:100]}
+            tracking_no = str(data.get("trackingNo") or "").strip()[:100]
+            if tracking_no and not all(char.isascii() and (char.isalnum() or char == "-") for char in tracking_no):
+                raise ValueError("邮件编号仅支持字母、数字和连字符")
+            title = str(data.get("title") or "")[:100] if config.MAIL_NOTE_ENABLED else "由 WeMail 小程序登记"
+            payload = {"localId": local_id, "senderId": profile["contact_id"], "recipientId": data.get("recipientId"), "sendDate": data.get("sendDate"), "mailType": str(data.get("mailType") or "平信")[:100], "trackingNo": tracking_no, "title": title or "由 WeMail 小程序登记"}
             db.execute("INSERT INTO notion_mails(id,send_date,tracking_no,mail_type,received,sender_id,recipient_id,sync_state,created_at,updated_at) VALUES(?,?,?,?,0,?,?, 'pending_create',?,?)", (local_id, payload["sendDate"] or "", payload["trackingNo"], payload["mailType"], payload["senderId"], payload["recipientId"], now, now))
             db.execute("INSERT INTO notion_outbox(operation,entity_id,payload,next_attempt_at,created_at) VALUES('mail.create',?,?,?,?)", (local_id, json.dumps(payload, ensure_ascii=False), now, now))
         return {"created": True, "pageId": local_id, "syncState": "pending_create"}

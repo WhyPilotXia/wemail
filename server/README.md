@@ -12,7 +12,7 @@
 - 响应超过 4KB 时才尝试 gzip，并且只在压缩后实际更小时启用；小响应不压缩。
 - 请求和响应使用约 900B 的 MTU 安全分片，支持组包、超时重试和请求 ID 幂等缓存。
 - `wx.login` code 由服务器向微信 `jscode2session` 换取可信 OpenID。
-- 手机号 code 由服务器调用微信 `getuserphonenumber`，联系人及个人资料使用完整手机号。
+- 身份关联采用姓名+手机号输入核验：服务器在本地 Notion 联系人缓存中匹配姓名与手机号，命中后经用户确认绑定；绑定关系（openid、昵称）记录在 SQLite `contact_bindings` 表，联系人资料仍以 Notion 为权威来源。
 - 用户、活动、报名、阅读进度保存在 `wemail.db`；头像压缩后保存在 SQLite。
 - Notion Token 和 AppSecret 只存服务器 `.env`，不会写入客户端或提交仓库。
 - 服务日志同时输出到控制台和 `logs/wemail-server.log`，单文件 5MB，保留 5 份。
@@ -36,9 +36,11 @@ Copy-Item .env.example .env
 ```text
 WECHAT_APP_SECRET=微信公众平台中的小程序AppSecret
 NOTION_TOKEN=现有NotionToken
+ADMIN_PHONE=管理员在联系人表中的手机号
+MAIL_NOTE_ENABLED=false
 ```
 
-`WECHAT_APP_SECRET` 位于微信公众平台“开发管理 → 开发设置 → 开发者 ID”；`NOTION_TOKEN` 由 Notion Integration 提供。两者只写入被 Git 忽略的 `server/.env`，不要提交或发送给他人。其余运行参数均已在 `.env.example` 中提供可复现默认值，可按部署环境调整。
+`WECHAT_APP_SECRET` 位于微信公众平台“开发管理 → 开发设置 → 开发者 ID”；`NOTION_TOKEN` 由 Notion Integration 提供。`ADMIN_PHONE` 必须与 Notion 联系人表中的手机号一致，该用户才可发布活动和开奖。个人主体版本应保持 `MAIL_NOTE_ENABLED=false`，此时服务端忽略客户端伪造的寄件备注，仅向 Notion 标题字段写入固定系统文案。配置只写入被 Git 忽略的 `server/.env`，不要提交或发送给他人。其余运行参数均已在 `.env.example` 中提供可复现默认值，可按部署环境调整。
 
 启动：
 
@@ -109,10 +111,11 @@ powershell -ExecutionPolicy Bypass -File .\run-tests.ps1
 2. 重新进入“我的”，应能用 `wx.login` 建立会话并读取资料。
 3. 修改昵称和地址，退出重进确认保存。
 4. 选择头像，确认退出重进仍显示。
-5. 手机号授权并匹配 Notion 联系人。
-6. 检查通讯录、信件列表、寄信、签收。
-7. 创建活动、第二个账号参与、发起人开奖。
-8. 阅读小说并检查跨设备进度。
+5. 在“我的”输入联系人表中的姓名与手机号，确认绑定提示与资料回填；用一个已绑定的身份在另一微信账号重试，确认提示“已被绑定”且可解绑换绑。
+6. 检查未匹配联系人无法访问通讯录、寄件记录和活动；匹配后可正常访问。
+7. 检查寄件记录仅寄件人与收件人可见，并验证登记寄件、签收。
+8. 使用管理员手机号发布活动和开奖，确认普通联系人只能参与且看不到发布入口。
+9. 阅读小说并检查跨设备进度。
 
 ## 安全与限制
 

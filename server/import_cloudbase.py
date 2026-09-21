@@ -52,7 +52,7 @@ def main():
             for row in rows:
                 db.execute("""INSERT OR REPLACE INTO events(id,type,title,description,deadline,participant_limit,allow_note,status,participant_count,owner_name,owner_openid,winner_name,winner_openid,drawn_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
                     row.get("_id"), row.get("type", "lottery"), row.get("title", ""), row.get("description", ""),
-                    date_value(row.get("deadline")), int(row.get("limit") or 0), int(bool(row.get("allowNote"))), row.get("status", "open"),
+                    date_value(row.get("deadline")), int(row.get("limit") or 0), 0, row.get("status", "open"),
                     int(row.get("participantCount") or 0), row.get("ownerName", ""), row.get("ownerOpenid", ""), row.get("winnerName", ""),
                     row.get("winnerOpenid", ""), date_value(row.get("drawnAt")) or None, date_value(row.get("createdAt")) or storage.now(), date_value(row.get("updatedAt")) or storage.now(),
                 ))
@@ -61,7 +61,7 @@ def main():
             rows = load_rows(args.entries)
             for row in rows:
                 db.execute("""INSERT OR REPLACE INTO event_entries(id,event_id,openid,name,avatar_data,note,created_at) VALUES(?,?,?,?,?,?,?)""", (
-                    row.get("_id"), row.get("eventId"), row.get("openid") or row.get("_openid"), row.get("name", "微信用户"), row.get("avatarUrl", ""), row.get("note", ""), date_value(row.get("createdAt")) or storage.now(),
+                    row.get("_id"), row.get("eventId"), row.get("openid") or row.get("_openid"), row.get("name", "微信用户"), row.get("avatarUrl", ""), "", date_value(row.get("createdAt")) or storage.now(),
                 ))
             counts["event_entries"] = len(rows)
         if args.reading:

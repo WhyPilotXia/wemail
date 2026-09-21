@@ -40,6 +40,12 @@ class NotionSyncWorker:
                 raise RuntimeError("信件尚未完成 Notion 创建，稍后重试")
             notion_api.sign_mail_remote(page_id)
             self.storage.complete_outbox(task["id"], task["entity_id"], operation=task["operation"])
+        elif task["operation"] == "contact.update":
+            properties = notion_api.contact_update_properties(payload["fields"])
+            if not properties:
+                raise RuntimeError("联系人更新负载为空")
+            notion_api.update_contact_remote(payload["contactId"], properties)
+            self.storage.complete_outbox(task["id"], task["entity_id"], operation=task["operation"])
         else:
             raise RuntimeError(f"未知同步操作 {task['operation']}")
         LOGGER.info("notion push ok task=%d operation=%s entity=%s", task["id"], task["operation"], task["entity_id"])
