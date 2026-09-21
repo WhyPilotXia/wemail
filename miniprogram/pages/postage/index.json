@@ -1,6 +1,7 @@
 {
-  "navigationBarTitleText": "邮费试算",
+  "navigationBarTitleText": "邮费/邮票计算",
   "usingComponents": {
-    "postage-calculator": "/components/postage-calculator/index"
+    "postage-calculator": "/components/postage-calculator/index",
+    "stamp-calculator": "/components/stamp-calculator/index"
   }
 }

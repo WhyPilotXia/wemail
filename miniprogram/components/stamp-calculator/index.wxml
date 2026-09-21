@@ -1,0 +1,23 @@
+<view class="postage-card card">
+  <view class="postage-head">
+    <view><text class="postage-title">邮票计算</text><text class="postage-subtitle">凑出所需邮资</text></view>
+  </view>
+  <view class="field">
+    <text class="label">目标邮资（元）</text>
+    <input class="input" type="digit" placeholder="可手动输入，未输入时上方结果会自动填入" value="{{amount}}" bindinput="inputAmount"/>
+  </view>
+  <view class="denom-title">可用面值</view>
+  <view class="denom-grid">
+    <view wx:for="{{denominations}}" wx:key="label" class="denom-chip {{item.checked?'on':''}}" data-value="{{item.value}}" bindtap="toggleDenom">
+      <text>{{item.label}}元</text>
+    </view>
+  </view>
+  <view wx:if="{{result}}" class="result-card">
+    <text class="result-label">共 {{result.pieces}} 张邮票</text>
+    <text wx:for="{{result.lines}}" wx:key="*this" class="result-line">{{item}}</text>
+    <text wx:if="{{result.priceText}}" class="result-note">按实价折算约 ¥{{result.priceText}}</text>
+  </view>
+  <view wx:elif="{{hint}}" class="calc-hint">{{hint}}</view>
+  <view wx:if="{{result && !result.exact}}" class="calc-hint">无法凑出 {{result.targetText}} 元，当前最优 {{result.totalText}} 元，试试加面值种类</view>
+  <view class="disclaimer">试算结果仅供参考，以实际收费为准</view>
+</view>

@@ -5,6 +5,7 @@
   "scripts": {
     "lint": "eslint .",
     "test:postage": "node scripts/test-postage.js",
+    "test:stamps": "node scripts/test-stamps.js",
     "sync:postage": "node scripts/sync-postage-data.js"
   },
   "repository": {

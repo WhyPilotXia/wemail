@@ -130,6 +130,7 @@ Component({
           destinationId: destination && destination.id
         })
         this.setData({ result: { ...calculated, totalText: calculated.total.toFixed(2), volumetricText: calculated.volumetricWeight ? calculated.volumetricWeight.toFixed(0) : '' }, error: '' })
+        this.triggerEvent('calculated', { total: calculated.total })
       } catch (error) {
         this.setData({ result: null, error: error.message })
       }

@@ -8,7 +8,7 @@
   <view class="section">
     <view class="postage-entry card" bindtap="openPostage">
       <view class="postage-icon">¥</view>
-      <view class="postage-copy"><text class="postage-title">邮费试算</text><text class="postage-desc">国内常用邮政业务，本地即时估算</text></view>
+      <view class="postage-copy"><text class="postage-title">邮费/邮票计算</text><text class="postage-desc">国内常用邮政业务，本地即时估算</text></view>
       <text class="postage-arrow">›</text>
     </view>
   </view>
