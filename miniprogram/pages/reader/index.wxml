@@ -1,1 +1,16 @@
-<view class="reader"><view class="reader-top"><text class="book-label">{{book}}</text><view class="tools"><text data-delta="-2" bindtap="font">A−</text><text data-delta="2" bindtap="font">A+</text><text bindtap="catalog">目录</text></view></view><block wx:if="{{current}}"><view class="chapter-no">CHAPTER {{current.num}}</view><view class="chapter-title">{{current.title}}</view><view class="ornament">· · ·</view><view class="content" style="font-size:{{fontSize}}rpx"><block wx:for="{{current.blocks}}" wx:key="index"><text wx:if="{{item.type==='text'}}" class="content-text" selectable>{{item.content}}</text><image wx:else class="content-image" src="{{item.src}}" mode="widthFix" show-menu-by-longpress="true" data-src="{{item.src}}" bindtap="previewImage"/></block></view><view class="pager"><button disabled="{{index===0}}" bindtap="prev">上一章</button><text>{{index+1}} / {{chapters.length}}</text><button disabled="{{index===chapters.length-1}}" bindtap="next">下一章</button></view></block></view><view wx:if="{{showCatalog}}" class="mask" bindtap="catalog"></view><view class="catalog {{showCatalog?'show':''}}"><view class="catalog-head"><text>{{book}}</text><text bindtap="catalog">关闭</text></view><scroll-view scroll-y class="catalog-list"><view class="catalog-item {{index===itemIndex?'active':''}}" wx:for="{{chapters}}" wx:key="num" wx:for-index="itemIndex" data-index="{{itemIndex}}" bindtap="select"><text>{{item.title}}</text><text>›</text></view></scroll-view></view>
+<view class="reader">
+  <view wx:if="{{checking}}" class="gate-status">正在确认查看权限…</view>
+  <view wx:elif="{{!allowed}}" class="gate-block">
+    <view class="gate-icon">✉</view>
+    <view class="gate-title">原创文字仅对已登记好友开放</view>
+    <view class="gate-desc">请在“我的”页面输入联系人表中的姓名与手机号，关联身份后即可查看。</view>
+    <button class="gate-btn" bindtap="goVerify">去关联身份</button>
+    <button wx:if="{{gateError}}" class="gate-btn ghost" bindtap="retryAccess">重新检测</button>
+  </view>
+  <block wx:else>
+    <view class="reader-top"><text class="book-label">{{book}}</text><view class="tools"><text data-delta="-2" bindtap="font">A−</text><text data-delta="2" bindtap="font">A+</text><text bindtap="catalog">目录</text></view></view>
+    <block wx:if="{{current}}"><view class="chapter-no">PART {{current.num}}</view><view class="chapter-title">{{current.title}}</view><view class="ornament">· · ·</view><view class="content" style="font-size:{{fontSize}}rpx"><block wx:for="{{current.blocks}}" wx:key="index"><text wx:if="{{item.type==='text'}}" class="content-text" selectable>{{item.content}}</text><image wx:else class="content-image" src="{{item.src}}" mode="widthFix" show-menu-by-longpress="true" data-src="{{item.src}}" bindtap="previewImage"/></block></view><view class="pager"><button disabled="{{index===0}}" bindtap="prev">上一篇</button><text>{{index+1}} / {{chapters.length}}</text><button disabled="{{index===chapters.length-1}}" bindtap="next">下一篇</button></view></block>
+  </block>
+</view>
+<view wx:if="{{showCatalog && allowed}}" class="mask" bindtap="catalog"></view>
+<view wx:if="{{allowed}}" class="catalog {{showCatalog?'show':''}}"><view class="catalog-head"><text>{{book}}</text><text bindtap="catalog">关闭</text></view><scroll-view scroll-y class="catalog-list"><view class="catalog-item {{index===itemIndex?'active':''}}" wx:for="{{chapters}}" wx:key="num" wx:for-index="itemIndex" data-index="{{itemIndex}}" bindtap="select"><text>{{item.title}}</text><text>›</text></view></scroll-view></view>

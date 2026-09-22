@@ -29,9 +29,9 @@ function renderContent(book, content) {
     const path = (imageSources[book] || {})[match[2]]
     if (path) blocks.push({ type: 'image', src: path, alt: match[1] || '正文图片' })
     else blocks.push({ type: 'text', content: match[0] })
-    cursor = pattern.lastIndex
+    cursor = match.lastIndex
   }
-  if (cursor < source.length) blocks.push({ type: 'text', content: source.slice(cursor) })
+  if (cursor < source.length) blocks.push({ type: 'text', content: source.slice(cursor, source.length) })
   return blocks.length ? blocks : [{ type: 'text', content: source }]
 }
 
@@ -40,13 +40,40 @@ function prepareChapter(book, chapter) {
 }
 
 Page({
-  data: { book: '', chapters: [], index: 0, current: null, showCatalog: false, fontSize: 36, loaded: false },
+  data: { book: '', chapters: [], index: 0, current: null, showCatalog: false, fontSize: 36, loaded: false, checking: true, allowed: false, gateError: '' },
   onLoad(query) {
     const book = decodeURIComponent(query.book || '')
+    this.bookName = book
+    wx.setNavigationBarTitle({ title: book || '文集' })
+    this.checkAccess(query)
+  },
+  checkAccess(query) {
+    const cached = getApp().globalData.profile
+    if (cached && cached.contactId) {
+      this.setData({ checking: false, allowed: true, gateError: '' })
+      this.start(query)
+      return
+    }
+    this.setData({ checking: true, gateError: '' })
+    api.call('profile.get', {}, { loading: false, silent: true }).then((data) => {
+      const profile = (data && data.profile) || {}
+      getApp().globalData.profile = profile
+      getApp().globalData.openid = data.openid
+      const allowed = Boolean(profile.contactId)
+      this.setData({ checking: false, allowed, gateError: '' })
+      if (allowed) this.start(query)
+    }).catch((error) => {
+      this.setData({ checking: false, allowed: false, gateError: api.describeError(error) })
+    })
+  },
+  retryAccess() { this.checkAccess(this.lastQuery || {}) },
+  goVerify() { wx.switchTab({ url: '/pages/profile/index' }) },
+  start(query) {
+    this.lastQuery = query || {}
+    const book = this.bookName
     const chapters = loaders[book] ? loaders[book]() : []
     const queryIndex = Number(query.chapter)
     const hasQueryIndex = Number.isFinite(queryIndex) && query.chapter !== undefined
-    wx.setNavigationBarTitle({ title: book || '阅读' })
     if (hasQueryIndex) {
       this.showChapter(book, chapters, queryIndex)
       return
@@ -91,7 +118,7 @@ Page({
   },
   onShareAppMessage() {
     return {
-      title: `《${this.data.book}》${this.data.current.title}`,
+      title: `WeMail 文集 · ${this.data.book}`,
       path: `/pages/reader/index?book=${encodeURIComponent(this.data.book)}&chapter=${this.data.index}`
     }
   }
