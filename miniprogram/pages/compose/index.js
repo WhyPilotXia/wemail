@@ -25,6 +25,23 @@ Page({
   changeDate(event) { this.setData({ 'form.sendDate': event.detail.value }) },
   changeType(event) { this.setData({ 'form.mailType': this.data.mailTypes[Number(event.detail.value)] }) },
   input(event) { this.setData({ [`form.${event.currentTarget.dataset.key}`]: event.detail.value }) },
+  scanTracking() {
+    wx.scanCode({
+      onlyFromCamera: false,
+      scanType: ['barCode', 'qrCode'],
+      success: (res) => {
+        const code = String(res.result || '').trim()
+        if (!code) return wx.showToast({ title: '未识别到编号内容', icon: 'none' })
+        if (!/^[A-Za-z0-9-]+$/.test(code)) return wx.showToast({ title: '编号仅支持字母、数字和连字符', icon: 'none' })
+        this.setData({ 'form.trackingNo': code })
+        wx.showToast({ title: '已填入邮件编号', icon: 'success' })
+      },
+      fail: (err) => {
+        if (err && err.errMsg && err.errMsg.includes('cancel')) return
+        wx.showToast({ title: '扫码失败，请重试', icon: 'none' })
+      }
+    })
+  },
   submit() {
     const { recipientIndex, senderIndex, contacts, form } = this.data
     if (recipientIndex < 0 || senderIndex < 0) return wx.showToast({ title: '请选择寄件人和收件人', icon: 'none' })
