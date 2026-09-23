@@ -4,14 +4,23 @@ const loaders = {
   李氏庄园: () => require('../../data/books/李氏庄园'),
   回信券风暴: () => require('../../data/books/回信券风暴'),
   股神牛久盛: () => require('../../data/books/股神牛久盛'),
-  名将之后: () => require('../../data/books/名将之后')
+  名将之后: () => require('../../data/books/名将之后'),
+  心非黍离专栏: () => require('../../data/books/心非黍离专栏')
 }
 
 const imageSources = {
   李氏庄园: {
     'assets/image.png': '/assets/books/李氏庄园/image-optimized.jpg',
     'assets/22091.jpg': '/assets/books/李氏庄园/22091.jpg',
-    'assets/22092.jpg': '/assets/books/李氏庄园/22092.jpg'
+    'assets/22092.jpg': '/assets/books/李氏庄园/22092.jpg',
+    'assets/22863.jpg': '/assets/books/李氏庄园/22863.jpg',
+    'assets/24939.jpg': '/assets/books/李氏庄园/24939.jpg'
+  },
+  股神牛久盛: {
+    'assets/24159.jpg': '/assets/books/股神牛久盛/24159.jpg'
+  },
+  心非黍离专栏: {
+    'assets/xinfei.jpg': '/assets/books/心非黍离专栏/xinfei.jpg'
   },
   名将之后: {
     'assets/22834.jpg': '/assets/books/名将之后/22834-optimized.jpg'
