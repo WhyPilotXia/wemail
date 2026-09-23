@@ -11,3 +11,6 @@
 .scan-corner.d{right:0;bottom:0;border-right-width:3rpx;border-bottom-width:3rpx;border-bottom-right-radius:6rpx}
 .scan-line{position:absolute;left:8rpx;right:8rpx;top:50%;height:3rpx;margin-top:-1.5rpx;border-radius:99rpx;background:#1769ff}
 .scan-text{color:#1769ff;font-size:24rpx;font-weight:600}
+.tracking-label-row{margin-bottom:12rpx;gap:16rpx;justify-content:space-between}
+.tracking-label-row .label{margin-bottom:0;flex-shrink:0}
+.tracking-error{color:#c63f3f;font-size:22rpx;text-align:right;word-break:break-all}

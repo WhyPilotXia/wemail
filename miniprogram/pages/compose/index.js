@@ -24,7 +24,13 @@ Page({
   openPostage() { wx.navigateTo({ url: '/pages/postage/index' }) },
   changeDate(event) { this.setData({ 'form.sendDate': event.detail.value }) },
   changeType(event) { this.setData({ 'form.mailType': this.data.mailTypes[Number(event.detail.value)] }) },
-  input(event) { this.setData({ [`form.${event.currentTarget.dataset.key}`]: event.detail.value }) },
+  input(event) {
+    const key = event.currentTarget.dataset.key
+    const value = event.detail.value
+    const patch = { [`form.${key}`]: value }
+    if (key === 'trackingNo') patch.trackingNoInvalid = !!value && !/^[A-Za-z0-9-]+$/.test(value.trim())
+    this.setData(patch)
+  },
   scanTracking() {
     wx.scanCode({
       onlyFromCamera: false,
@@ -32,8 +38,7 @@ Page({
       success: (res) => {
         const code = String(res.result || '').trim()
         if (!code) return wx.showToast({ title: '未识别到编号内容', icon: 'none' })
-        if (!/^[A-Za-z0-9-]+$/.test(code)) return wx.showToast({ title: '编号仅支持字母、数字和连字符', icon: 'none' })
-        this.setData({ 'form.trackingNo': code })
+        this.setData({ 'form.trackingNo': code, trackingNoInvalid: !/^[A-Za-z0-9-]+$/.test(code) })
         wx.showToast({ title: '已填入邮件编号', icon: 'success' })
       },
       fail: (err) => {
@@ -48,7 +53,9 @@ Page({
     if (recipientIndex === senderIndex) return wx.showToast({ title: '寄件人与收件人不能相同', icon: 'none' })
     const recipient = contacts[recipientIndex]
     if (!recipient.address1 && !recipient.address2) return wx.showToast({ title: '收件人没有可用地址', icon: 'none' })
-    if (form.trackingNo && !/^[A-Za-z0-9-]+$/.test(form.trackingNo.trim())) return wx.showToast({ title: '邮件编号仅支持字母、数字和连字符', icon: 'none' })
+    if (form.trackingNo && !/^[A-Za-z0-9-]+$/.test(form.trackingNo.trim())) {
+      return wx.showModal({ title: '邮件编号格式有误', content: '邮件编号只能使用字母、数字和连字符，请修改后再保存。', showCancel: false, confirmText: '知道了' })
+    }
     this.setData({ submitting: true })
     api.call('mail.create', { ...form, trackingNo: form.trackingNo.trim(), senderId: contacts[senderIndex].id, recipientId: recipient.id }, { title: '正在保存' }).then(() => {
       wx.showToast({ title: '寄件记录已保存', icon: 'success' })
